@@ -1,0 +1,3 @@
+results/**
+**/*.ckpt
+lightning_logs/**
