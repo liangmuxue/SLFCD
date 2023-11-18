@@ -8,6 +8,8 @@ import openslide
 import cv2
 import json
 
+from utils.constance import get_label_with_group_code
+
 sys.path.append(os.path.dirname(os.path.abspath(__file__)) + '/../../')
 
 parser = argparse.ArgumentParser(description='Get tumor mask of tumor-WSI and '
@@ -22,7 +24,7 @@ parser.add_argument('--level', default=6, type=int, help='at which WSI level'
                     ' to obtain the mask, default 6')
 
 
-def run(wsi_path,npy_path,json_path,level=2):
+def run(wsi_path,npy_path,json_path,level=0):
     
     for wsi_file in os.listdir(wsi_path):
         if not wsi_file.endswith(".svs"):
@@ -58,13 +60,15 @@ def run(wsi_path,npy_path,json_path,level=2):
         for tumor_polygon in tumor_polygons:
             # plot a polygon
             name = tumor_polygon["name"]
+            group_name = tumor_polygon["group_name"]
             vertices = np.array(tumor_polygon["vertices"]) / factor
             vertices = vertices.astype(np.int32)
+            # different mask flag according to different group 
+            code = get_label_with_group_code(group_name)["code"]
+            mask_code = code
+            cv2.fillPoly(mask_tumor, [vertices], (mask_code))
     
-            cv2.fillPoly(mask_tumor, [vertices], (255))
-    
-        mask_tumor = mask_tumor[:] > 127
-        mask_tumor = np.transpose(mask_tumor)
+        mask_tumor = mask_tumor.astype(np.uint8)
     
         np.save(npy_file, mask_tumor)
 
@@ -73,9 +77,11 @@ def main():
     type_part = "lsil"
     # type_part = "hsil"
     wsi_path = "/home/bavon/datasets/wsi/{}".format(type_part)
-    npy_path = "{}/tumor_mask".format(wsi_path)   
-    json_path = "{}/json".format(wsi_path)  
-    run(wsi_path,npy_path,json_path)
+    file_path = "/home/bavon/datasets/wsi/test"
+    wsi_path = "{}/data".format(file_path)  
+    npy_path = "{}/tumor_mask".format(file_path)   
+    json_path = "{}/json".format(file_path)  
+    run(wsi_path,npy_path,json_path,level=0)
 
 if __name__ == "__main__":
     main()

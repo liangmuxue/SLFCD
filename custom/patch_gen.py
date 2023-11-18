@@ -7,6 +7,8 @@ from shutil import copyfile
 from multiprocessing import Pool, Value, Lock
 
 import openslide
+import cv2
+import numpy as np
 
 sys.path.append(os.path.dirname(os.path.abspath(__file__)) + '/../../')
 
@@ -46,7 +48,13 @@ def process(opts):
     img = slide.read_region(
         (x, y), args.level,
         (args.patch_size, args.patch_size)).convert('RGB')
-
+    ni = np.array(img)
+    img = cv2.cvtColor(ni,cv2.COLOR_RGB2BGR)    
+    cv2.namedWindow('image', cv2.WINDOW_NORMAL)
+    cv2.imshow('image', img)
+    cv2.waitKey(0)
+    cv2.destroyAllWindows()    
+    
     img.save(os.path.join(args.patch_path, str(i) + '.png'))
 
     global lock
@@ -60,7 +68,7 @@ def process(opts):
                                  count.value))
 
 
-def run(wsi_path,coords_path,patches_path,num_process=5,patch_size=768,level=2):
+def run(wsi_path,coords_path,patches_path,num_process=1,patch_size=1000,level=2):
     logging.basicConfig(level=logging.INFO)
 
     
@@ -91,13 +99,22 @@ def run(wsi_path,coords_path,patches_path,num_process=5,patch_size=768,level=2):
 def main():
     # args = parser.parse_args()
     for wsi_path in ["/home/bavon/datasets/wsi/hsil","/home/bavon/datasets/wsi/lsil"]:
-        if wsi_path=="/home/bavon/datasets/wsi/hsil":
-            continue
         for task_type in ["train","valid"]:      
             for tum_type in ["tumor","normal"]:
                 txt_file = "{}/txt/{}_{}_total.txt".format(wsi_path,task_type,tum_type)
                 patches_path = "{}/patches/{}_{}".format(wsi_path,tum_type,task_type)
                 run(wsi_path,txt_file,patches_path)
 
+
+def patch_single():
+    wsi_path = "/home/bavon/datasets/wsi/test"
+    txt_file = "/home/bavon/datasets/wsi/test/txt/9_tumor.txt"
+    patches_path = "/home/bavon/datasets/wsi/test/patches"
+    run(wsi_path,txt_file,patches_path,patch_size=200)
+    
 if __name__ == '__main__':
-    main()
+    # main()
+    patch_single()
+    
+    
+    

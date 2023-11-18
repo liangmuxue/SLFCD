@@ -16,7 +16,7 @@ parser.add_argument('--RGB_min', default=50, type=int, help='min value for RGB'
                     ' channel, default 50')
 
 
-def run(wsi_path,npy_path,RGB_min=50,level=2):
+def run(wsi_path,npy_path,RGB_min=50,level=1):
     logging.basicConfig(level=logging.INFO)
 
     # walk all svs files,and convert
@@ -55,8 +55,8 @@ def run(wsi_path,npy_path,RGB_min=50,level=2):
 
 
 def main():
-    wsi_path = "/home/bavon/datasets/wsi/lsil"
-    npy_path = "/home/bavon/datasets/wsi/lsil/mask"    
+    wsi_path = "/home/bavon/datasets/wsi/test"
+    npy_path = "/home/bavon/datasets/wsi/test/mask"    
     run(wsi_path,npy_path)
 
 

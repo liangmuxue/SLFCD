@@ -96,7 +96,22 @@ def merge():
                 txt_path = "/home/bavon/datasets/wsi/{}/txt/{}".format(type,task_type)
                 outfile = "/home/bavon/datasets/wsi/{}/txt/{}_{}_total.txt".format(type,task_type,tum_type)                
                 MergeTxt(txt_path,outfile,contain_filter="_{}".format(tum_type))
-        
+ 
+def spot_single():
+    patch_number = 1000
+    level = 2
+    txt_file_path = "/home/bavon/datasets/wsi/test/txt/9_tumor.txt"
+    mask_file_path = "/home/bavon/datasets/wsi/test/tumor_mask/9-CG23_12974_12.npy" 
+    mask_name = "9-CG23_12974_12"
+    sampled_points = patch_point_in_mask_gen(mask_file_path, patch_number).get_patch_point()
+    sampled_points = (sampled_points * 2 ** level).astype(np.int32) # make sure the factor
+    name = np.full((sampled_points.shape[0], 1), mask_name)
+    center_points = np.hstack((name, sampled_points))
+    
+    with open(txt_file_path, "a") as f:
+        np.savetxt(f, center_points, fmt="%s", delimiter=",")
+       
 if __name__ == "__main__":
-    main()
-    merge()
+    # main()
+    # merge()
+    spot_single()

@@ -1,3 +1,4 @@
 results/**
 **/*.ckpt
+**/*.pyc
 lightning_logs/**

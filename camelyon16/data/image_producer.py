@@ -1,6 +1,6 @@
 import os
 import sys
-
+import cv2
 import numpy as np
 import random
 from torch.utils.data import Dataset
@@ -9,6 +9,8 @@ from PIL import Image
 np.random.seed(0)
 
 from torchvision import transforms  # noqa
+
+from utils.vis import vis_data,visdom_data
 
 
 class ImageDataset(Dataset):
@@ -43,6 +45,8 @@ class ImageDataset(Dataset):
                 for fname in sorted(fnames):
                     if fname.split('.')[-1] == 'png':
                         path = os.path.join(root, fname)
+                        # img = cv2.imread(path)
+                        # visdom_data(img, [])
                         item = (path, class_to_idx[target])
                         self._items.append(item)
 

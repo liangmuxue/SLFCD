@@ -250,7 +250,8 @@ class UteFormatter(object):
                      annotation.findall('./Coordinates/Coordinate')))
             vertices = np.round([X, Y]).astype(int).transpose().tolist()
             name = annotation.attrib['Name']
-            json_dict['positive'].append({'name': name, 'vertices': vertices})
+            group_name = annotation.attrib['PartOfGroup']
+            json_dict['positive'].append({'name': name, "group_name":group_name,'vertices': vertices})
 
         for annotation in annotations_negative:
             X = list(map(lambda x: float(x.get('X')),
@@ -259,7 +260,8 @@ class UteFormatter(object):
                      annotation.findall('./Coordinates/Coordinate')))
             vertices = np.round([X, Y]).astype(int).transpose().tolist()
             name = annotation.attrib['Name']
-            json_dict['negative'].append({'name': name, 'vertices': vertices})
+            group_name = annotation.attrib['PartOfGroup']
+            json_dict['negative'].append({'name': name, "group_name":group_name,'vertices': vertices})
 
         with open(outjson, 'w') as f:
             json.dump(json_dict, f, indent=1)
