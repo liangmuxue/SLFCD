@@ -26,22 +26,14 @@ parser.add_argument('--level', default=6, type=int, help='at which WSI level'
 
 def run(wsi_path,npy_path,json_path,level=0):
     
-    for wsi_file in os.listdir(wsi_path):
-        if not wsi_file.endswith(".svs"):
-            continue        
-        npy_file = wsi_file.replace(".svs", ".npy")
-        npy_file = npy_path + "/" + npy_file
-        if "-" in wsi_file:
-            file_part = wsi_file.split("-")[0]
-        else:
-            file_part = wsi_file.replace(".svs","")
-        json_file = file_part + ".json"
-        json_file = json_path + "/" + json_file
-        
-        wsi_file_path = wsi_path + "/" + wsi_file
+    for json_file in os.listdir(json_path):
+        json_file_path = os.path.join(json_path,json_file)
+        single_name = json_file.split(".")[0]
+        npy_file = os.path.join(npy_path,single_name+".npy")
+        wsi_file_path = os.path.join(wsi_path,single_name+".svs")
         slide = openslide.OpenSlide(wsi_file_path)
         if len(slide.level_dimensions)<=level:
-            print("no level for {},ignore:".format(wsi_file))
+            print("no level for {},ignore:".format(wsi_file_path))
             continue        
         w, h = slide.level_dimensions[level]
         mask_tumor = np.zeros((h, w)) # the init mask, and all the value is 0
@@ -50,10 +42,10 @@ def run(wsi_path,npy_path,json_path,level=0):
         factor = slide.level_downsamples[level]
     
         try:
-            with open(json_file) as f:
+            with open(json_file_path) as f:
                 dicts = json.load(f)
         except Exception as e:
-            print("open json file fail,ignore:{}".format(json_file))
+            print("open json file fail,ignore:{}".format(json_file_path))
             continue
         tumor_polygons = dicts['positive']
     
@@ -71,13 +63,11 @@ def run(wsi_path,npy_path,json_path,level=0):
         mask_tumor = mask_tumor.astype(np.uint8)
     
         np.save(npy_file, mask_tumor)
+        print("process {} ok".format(json_file))
 
 def main():
     logging.basicConfig(level=logging.INFO)
-    type_part = "lsil"
-    # type_part = "hsil"
-    wsi_path = "/home/bavon/datasets/wsi/{}".format(type_part)
-    file_path = "/home/bavon/datasets/wsi/test"
+    file_path = "/home/bavon/datasets/wsi/hsil"
     wsi_path = "{}/data".format(file_path)  
     npy_path = "{}/tumor_mask".format(file_path)   
     json_path = "{}/json".format(file_path)  

@@ -89,8 +89,6 @@ class Whole_Slide_Bag_COMBINE(Dataset):
 					target_patch_size = (target_patch_size, ) * 2
 				elif custom_downsample > 1:
 					target_patch_size = (patch_size // custom_downsample, ) * 2
-				else:
-					target_patch_size = None
 				for coord in f['coords']:
 					patches_bag = {"name":single_name}					
 					patches_bag["coord"] = np.array(coord) /scale
@@ -129,7 +127,7 @@ class Whole_Slide_Bag_COMBINE(Dataset):
 			label = np.argmax(np.bincount(mask_flag))
 		else:
 			label = 0
-		if self.target_patch_size is not None:
+		if self.target_patch_size > 0 :
 			img = img.resize(self.target_patch_size)
 		img = np.array(img)
 		img = self.roi_transforms(img)

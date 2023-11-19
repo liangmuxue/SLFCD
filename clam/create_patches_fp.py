@@ -109,6 +109,8 @@ def seg_and_patch(source, save_dir, patch_save_dir, mask_save_dir, stitch_save_d
 		xml_path = os.path.join(source,"xml", xml_file)
 		tumor_mask_file = slide.replace(".svs",".npy")
 		tumor_mask_path = os.path.join(source,"tumor_mask", tumor_mask_file)
+		if not os.path.exists(xml_path):
+			continue
 		WSI_object = WholeSlideImage(full_path)
 		WSI_object.initXML(xml_path)
 		WSI_object.initMask(tumor_mask_path)
