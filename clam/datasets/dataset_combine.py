@@ -7,7 +7,7 @@ import math
 import re
 import pdb
 import pickle
-
+import cv2
 import openslide
 from torch.utils.data import Dataset, DataLoader, sampler
 from torchvision import transforms, utils, models
@@ -15,8 +15,9 @@ import torch.nn.functional as F
 
 from PIL import Image
 import h5py
-
 from random import randrange
+from utils.constance import get_tumor_label_cate
+
 
 def eval_transforms(pretrained=False):
 	if pretrained:
@@ -44,11 +45,13 @@ class Whole_Slide_Bag_COMBINE(Dataset):
 		file_path,
 		wsi_path,
 		mask_path,
+		patch_path=None,
 		split_data=None,
 		custom_downsample=1,
 		target_patch_size=-1,
 		patch_level=0,
-		patch_size=256
+		patch_size=256,
+		work_type="train",
 		):
 		"""
 		Args:
@@ -66,16 +69,18 @@ class Whole_Slide_Bag_COMBINE(Dataset):
 
 		wsi_data = {}
 		patches_bag_list = []
-		mask_data = {}
-		pathces_total_len = 0
+		patches_tumor_patch_file_list = []
+		pathces_normal_len = 0
+		pathces_tumor_len = 0
+		file_names = []
 		# loop all patch files,and combine the coords data
 		for svs_file in split_data:
 			single_name = svs_file.split(".")[0]
-			patch_file = os.path.join(file_path,"patches",single_name + ".h5")	
+			file_names.append(single_name)
+			patch_file = os.path.join(file_path,patch_path,single_name + ".h5")	
 			wsi_file = os.path.join(file_path,"data",svs_file)	
 			npy_file = single_name +  ".npy"
 			npy_file = os.path.join(mask_path,npy_file)	
-			mask_data[single_name] = np.load(npy_file)
 			wsi_data[single_name] = openslide.open_slide(wsi_file)
 			scale = wsi_data[single_name].level_downsamples[patch_level]
 			with h5py.File(patch_file, "r") as f:
@@ -84,26 +89,45 @@ class Whole_Slide_Bag_COMBINE(Dataset):
 				patch_size = f['coords'].attrs['patch_size']
 				
 				# sum data length
-				pathces_total_len += len(f['coords'])
+				pathces_normal_len += len(f['coords'])
 				if target_patch_size > 0:
 					target_patch_size = (target_patch_size, ) * 2
 				elif custom_downsample > 1:
 					target_patch_size = (patch_size // custom_downsample, ) * 2
+					
+				# Normal patch data
 				for coord in f['coords']:
-					patches_bag = {"name":single_name}					
+					patches_bag = {"name":single_name,"scale":scale,"type":"normal"}		
 					patches_bag["coord"] = np.array(coord) /scale
 					patches_bag["coord"] = patches_bag["coord"].astype(np.int16)
 					patches_bag["patch_level"] = patch_level
+					patches_bag["label"] = 0
 					patches_bag_list.append(patches_bag)
-		
+					
+			# Annotation patch data
+			for label in get_tumor_label_cate():
+				if work_type=="train":
+					# Using augmentation image for validation
+					patch_img_path = os.path.join(file_path,"tumor_patch_img",str(label),"origin")
+				else:
+					# Using origin image for validation
+					patch_img_path = os.path.join(file_path,"tumor_patch_img",str(label),"origin")
+				file_list = os.listdir(patch_img_path)
+				for file in file_list:
+					if not single_name in file:
+						continue
+					tumor_file_path = os.path.join(patch_img_path,file)
+					patches_tumor_patch_file_list.append(tumor_file_path)
+					pathces_tumor_len += 1
 				
-		self.pathces_total_len = pathces_total_len
 		self.patches_bag_list = patches_bag_list
-		self.mask_data = mask_data
-		
+		self.pathces_normal_len = pathces_normal_len					
+		self.patches_tumor_patch_file_list = patches_tumor_patch_file_list
+		self.pathces_tumor_len = pathces_tumor_len
+				
+		self.pathces_total_len = pathces_tumor_len + pathces_normal_len
 		self.roi_transforms = eval_transforms()
 		self.target_patch_size = target_patch_size
-		self.wsi_data = wsi_data
 		
 	def __len__(self):
 		return self.pathces_total_len
@@ -111,29 +135,35 @@ class Whole_Slide_Bag_COMBINE(Dataset):
 
 	def __getitem__(self, idx):
 		
-		item = self.patches_bag_list[idx]
-		coord = item['coord']
-		name = item['name']
-		wsi = self.wsi_data[name]
-		# read image from wsi with coordination 
-		img = wsi.read_region(coord, self.patch_level, (self.patch_size, self.patch_size)).convert('RGB')
-		# get mask data and compute this region label
-		masks = self.mask_data[name][coord[1]:coord[1]+self.patch_size,coord[0]:coord[0]+self.patch_size]
-		mask_flag = masks[masks>0]
-		mask_tumor_size = np.sum(mask_flag)
-		img_size = self.patch_size * self.patch_size
-		# if has a certain ratio mask flag in this region,then put this flag as region's label
-		if mask_tumor_size/img_size > 0.3:
-			label = np.argmax(np.bincount(mask_flag))
+		# Judge type by index value
+		if idx>=self.pathces_normal_len:
+			# print("mask_tumor_size is:{},coord:{}".format(mask_tumor_size,coord))
+			file_path = self.patches_tumor_patch_file_list[idx-self.pathces_normal_len]
+			t = file_path.split("/")
+			try:
+				label = int(t[-3])
+				# label = 1
+			except Exception as e:
+				print("sp err:{}".format(t))
+			img_ori = cv2.imread(file_path)
+			item = {}
 		else:
+			item = self.patches_bag_list[idx]
+			name = item['name']
+			scale = item['scale']
+			coord = item['coord']
+			wsi_file = os.path.join(self.file_path,"data",name + ".svs")	
+			wsi = openslide.open_slide(wsi_file)			
+			# read image from wsi with coordination 
+			coord_ori = (coord * scale).astype(np.int16)			
+			img_ori = wsi.read_region(coord_ori, self.patch_level, (self.patch_size, self.patch_size)).convert('RGB')
+			img_ori = cv2.cvtColor(np.array(img_ori), cv2.COLOR_RGB2BGR)	
 			label = 0
 		if self.target_patch_size > 0 :
-			img = img.resize(self.target_patch_size)
-		img = np.array(img)
-		img = self.roi_transforms(img)
-		return img,label
+			img_ori = img_ori.resize(self.target_patch_size)
+		img = self.roi_transforms(img_ori)
+		return img,label,img_ori,item
 
 
-
-
-
+		
+				

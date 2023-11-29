@@ -147,8 +147,8 @@ def visdom_img_data(img_data, title="debug title", cap="debug cap", viz=None):
     )
 
 
-def visdom_data(img_data_ori, bboxes=None, box_mode=1, color='blue', not_show=False, title=None, caption=None,
-                img_single=None, img_single2=None):
+def visdom_data(img_data_ori, bboxes=None, box_mode=1, win="win",color='blue', not_show=False, title=None, caption=None,
+                img_single=None, img_single2=None,viz=None):
     from visdom import Visdom
     img_data = np.copy(img_data_ori)
     color = find_color_scalar(color)
@@ -175,10 +175,12 @@ def visdom_data(img_data_ori, bboxes=None, box_mode=1, color='blue', not_show=Fa
         if img_single2 is not None:
             img_single2 = cv2.resize(img_single2, (1920, 1080))
             img_data = np.concatenate((img_data, img_single2), axis=1)
-        viz = Visdom(env="kk", port=8098)
+        if viz is None:
+            viz = Visdom(env="kk", port=8098)
         raw_img = img_data.transpose(2, 0, 1)[::-1, ...]
         viz.image(
             raw_img,
+            win=win,
             opts=dict(title=title, caption=caption)
         )
         return

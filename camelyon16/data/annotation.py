@@ -252,6 +252,8 @@ class UteFormatter(object):
             name = annotation.attrib['Name']
             group_name = annotation.attrib['PartOfGroup']
             json_dict['positive'].append({'name': name, "group_name":group_name,'vertices': vertices})
+        # sorted
+        json_dict['positive'] = sorted(json_dict['positive'],key = lambda x:x["name"])            
 
         for annotation in annotations_negative:
             X = list(map(lambda x: float(x.get('X')),

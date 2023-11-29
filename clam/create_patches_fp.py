@@ -113,7 +113,7 @@ def seg_and_patch(source, save_dir, patch_save_dir, mask_save_dir, stitch_save_d
 			continue
 		WSI_object = WholeSlideImage(full_path)
 		WSI_object.initXML(xml_path)
-		WSI_object.initMask(tumor_mask_path)
+# WSI_object.initMask(tumor_mask_path)
 
 		if use_default_params:
 			current_vis_params = vis_params.copy()
@@ -251,7 +251,7 @@ parser.add_argument('--save_dir', type = str,
 					help='directory to save processed data')
 parser.add_argument('--preset', default=None, type=str,
 					help='predefined profile of default segmentation and filter parameters (.csv)')
-parser.add_argument('--patch_level', type=int, default=0, 
+parser.add_argument('--patch_level', type=int, default=1, 
 					help='downsample level at which to patch')
 parser.add_argument('--process_list',  type = str, default=None,
 					help='name of list of images to process with parameters (.csv)')
@@ -259,7 +259,7 @@ parser.add_argument('--process_list',  type = str, default=None,
 if __name__ == '__main__':
 	args = parser.parse_args()
 
-	patch_save_dir = os.path.join(args.save_dir, 'patches')
+	patch_save_dir = os.path.join(args.save_dir, 'patches_level1')
 	mask_save_dir = os.path.join(args.save_dir, 'masks')
 	stitch_save_dir = os.path.join(args.save_dir, 'stitches')
 
