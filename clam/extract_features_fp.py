@@ -6,7 +6,9 @@ import random
 import numpy as np
 import pdb
 import time
-from clam.datasets.dataset_h5 import Dataset_All_Bags, Whole_Slide_Bag_FP
+import json
+from argparse import Namespace
+from clam.datasets.dataset_h5 import Dataset_Combine_Bags, Whole_Slide_Bag_FP
 from torch.utils.data import DataLoader
 from clam.models.resnet_custom import resnet50_baseline
 import argparse
@@ -15,6 +17,8 @@ from utils.file_utils import save_hdf5
 from PIL import Image
 import h5py
 import openslide
+from custom.train_with_clamdata import CoolSystem,get_last_ck_file
+
 device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
 
 def compute_w_loader(file_path, output_path, wsi, model,
@@ -61,7 +65,7 @@ parser = argparse.ArgumentParser(description='Feature Extraction')
 # parser.add_argument('--data_h5_dir', type=str, default=None)
 parser.add_argument('--data_dir', type=str, default=None)
 parser.add_argument('--slide_ext', type=str, default= '.svs')
-parser.add_argument('--type', type=list, default=None)
+parser.add_argument('--types', type=str, default=None)
 parser.add_argument('--feat_dir', type=str, default=None)
 parser.add_argument('--batch_size', type=int, default=256)
 parser.add_argument('--no_auto_skip', default=False, action='store_true')
@@ -73,20 +77,27 @@ args = parser.parse_args()
 if __name__ == '__main__':
 
 	print('initializing dataset')
-	csv_path = args.csv_path
-	if csv_path is None:
-		raise NotImplementedError
-
-	bags_dataset = Dataset_All_Bags(csv_path)
+	
+	cnn_path = 'custom/configs/config.json'
+	with open(cnn_path, 'r') as f:
+		att_args = json.load(f) 
+	hparams = Namespace(**att_args) 
+		
+	data_path = args.data_dir
+	types = args.types.split(",")
+	bags_dataset = Dataset_Combine_Bags(data_path,types)
 	
 	os.makedirs(args.feat_dir, exist_ok=True)
-	os.makedirs(os.path.join(args.feat_dir, 'pt_files'), exist_ok=True)
-	os.makedirs(os.path.join(args.feat_dir, 'h5_files'), exist_ok=True)
+	for type in types:
+		os.makedirs(os.path.join(args.feat_dir, 'pt_files',type), exist_ok=True)
+		os.makedirs(os.path.join(args.feat_dir, 'h5_files',type), exist_ok=True)
 	dest_files = os.listdir(os.path.join(args.feat_dir, 'pt_files'))
 
 	print('loading model checkpoint')
-	model = resnet50_baseline(pretrained=True)
-	model = model.to(device)
+	checkpoint_path = os.path.join(hparams.work_dir,"checkpoints",hparams.model_name)
+	file_name = get_last_ck_file(checkpoint_path)
+	checkpoint_path_file = "{}/{}".format(checkpoint_path,file_name)
+	model = CoolSystem.load_from_checkpoint(checkpoint_path_file).to(device)
 	
 	# print_network(model)
 	if torch.cuda.device_count() > 1:
@@ -94,12 +105,15 @@ if __name__ == '__main__':
 		
 	model.eval()
 	total = len(bags_dataset)
-
+	
 	for bag_candidate_idx in range(total):
-		slide_id = bags_dataset[bag_candidate_idx].split(args.slide_ext)[0]
+		type,slide_id = bags_dataset[bag_candidate_idx]
+		data_slide_dir = os.path.join(data_path,type,"data")
+		data_h5_dir = os.path.join(data_path,type,"patches_level1")
+		slide_id = slide_id.split(args.slide_ext)[0]
 		bag_name = slide_id+'.h5'
-		h5_file_path = os.path.join(args.data_h5_dir, 'patches', bag_name)
-		slide_file_path = os.path.join(args.data_slide_dir, slide_id+args.slide_ext)
+		h5_file_path = os.path.join(data_h5_dir, bag_name)
+		slide_file_path = os.path.join(data_slide_dir, slide_id+args.slide_ext)
 		print('\nprogress: {}/{}'.format(bag_candidate_idx, total))
 		print(slide_id)
 
@@ -107,7 +121,7 @@ if __name__ == '__main__':
 			print('skipped {}'.format(slide_id))
 			continue 
 
-		output_path = os.path.join(args.feat_dir, 'h5_files', bag_name)
+		output_path = os.path.join(args.feat_dir, type,'h5_files', bag_name)
 		time_start = time.time()
 		wsi = openslide.open_slide(slide_file_path)
 		output_file_path = compute_w_loader(h5_file_path, output_path, wsi, 
@@ -122,7 +136,7 @@ if __name__ == '__main__':
 		print('coordinates size: ', file['coords'].shape)
 		features = torch.from_numpy(features)
 		bag_base, _ = os.path.splitext(bag_name)
-		torch.save(features, os.path.join(args.feat_dir, 'pt_files', bag_base+'.pt'))
+		torch.save(features, os.path.join(args.feat_dir, type,'pt_files', bag_base+'.pt'))
 
 
 

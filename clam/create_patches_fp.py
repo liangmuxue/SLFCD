@@ -110,6 +110,7 @@ def seg_and_patch(source, save_dir, patch_save_dir, mask_save_dir, stitch_save_d
 		tumor_mask_file = slide.replace(".svs",".npy")
 		tumor_mask_path = os.path.join(source,"tumor_mask", tumor_mask_file)
 		if not os.path.exists(xml_path):
+			df.loc[idx, 'status'] = 'failed_seg'
 			continue
 		WSI_object = WholeSlideImage(full_path)
 		WSI_object.initXML(xml_path)
@@ -229,6 +230,7 @@ def seg_and_patch(source, save_dir, patch_save_dir, mask_save_dir, stitch_save_d
 	patch_times /= total
 	stitch_times /= total
 
+	df = df[df["status"]!="failed_seg"]
 	df.to_csv(os.path.join(save_dir, 'process_list_autogen.csv'), index=False)
 	print("average segmentation time in s per slide: {}".format(seg_times))
 	print("average patching time in s per slide: {}".format(patch_times))

@@ -17,7 +17,7 @@
   "epochs": 500,
   "log_every": 5,
   "num_workers": 5,
-  "load_weight": false,
+  "load_weight": true,
   "model_name" : "resnet50_level1",
   "work_dir": "results"
 }

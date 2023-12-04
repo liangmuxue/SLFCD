@@ -182,12 +182,12 @@ class Dataset_Combine_Bags(Dataset):
 			if self.data_df is None:
 				self.data_df = df
 			else:
-				self.data_df = pd.concat(self.data_df,df)
+				self.data_df = pd.concat([self.data_df,df])
 	
 	def __len__(self):
 		return len(self.data_df)
 
 	def __getitem__(self, idx):
-		return self.data_df['slide_id'][idx]
+		return self.data_df['type'].values[idx],self.data_df['slide_id'].values[idx]
 
 
