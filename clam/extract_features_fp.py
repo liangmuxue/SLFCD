@@ -58,10 +58,10 @@ def compute_w_loader(file_path, output_path, wsi, model,
 
 
 parser = argparse.ArgumentParser(description='Feature Extraction')
-parser.add_argument('--data_h5_dir', type=str, default=None)
-parser.add_argument('--data_slide_dir', type=str, default=None)
+# parser.add_argument('--data_h5_dir', type=str, default=None)
+parser.add_argument('--data_dir', type=str, default=None)
 parser.add_argument('--slide_ext', type=str, default= '.svs')
-parser.add_argument('--csv_path', type=str, default=None)
+parser.add_argument('--type', type=list, default=None)
 parser.add_argument('--feat_dir', type=str, default=None)
 parser.add_argument('--batch_size', type=int, default=256)
 parser.add_argument('--no_auto_skip', default=False, action='store_true')

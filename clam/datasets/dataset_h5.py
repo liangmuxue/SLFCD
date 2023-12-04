@@ -166,6 +166,28 @@ class Dataset_All_Bags(Dataset):
 	def __getitem__(self, idx):
 		return self.df['slide_id'][idx]
 
+class Dataset_Combine_Bags(Dataset):
+	"""Custom dataset,combine multiple type data"""
 
+	def __init__(self, parent_path,types):
+		
+		self.data_df = None
+		
+		for type in types:
+			item_path = os.path.join(parent_path,type)
+			csv_path = os.path.join(item_path,"process_list_autogen.csv")
+			df = pd.read_csv(csv_path)
+			# Add type column
+			df.insert(df.shape[1], 'type', type)
+			if self.data_df is None:
+				self.data_df = df
+			else:
+				self.data_df = pd.concat(self.data_df,df)
+	
+	def __len__(self):
+		return len(self.data_df)
+
+	def __getitem__(self, idx):
+		return self.data_df['slide_id'][idx]
 
 

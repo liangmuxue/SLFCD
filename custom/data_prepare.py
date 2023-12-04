@@ -73,9 +73,7 @@ def crop_with_annotation(file_path,level=1):
     total_file_number = len(os.listdir(json_path))
     for i,json_file in enumerate(os.listdir(json_path)):
         json_file_path = os.path.join(json_path,json_file)  
-        single_name = json_file.split(".")[0]
-        if single_name!="9-CG23_12974_12":
-            continue        
+        single_name = json_file.split(".")[0]    
         wsi_file = os.path.join(wsi_path,single_name + ".svs")  
         wsi = openslide.open_slide(wsi_file)  
         scale = wsi.level_downsamples[level]
@@ -203,6 +201,7 @@ def build_annotation_patches(file_path,level=1,patch_size=64):
         mask_data = np.load(npy_file)
                 
         with h5py.File(patch_file_path, "a") as f:
+            print("crop_region for:{}".format(patch_file_path))
             crop_region = f['crop_region'][:]
             label_data = f['crop_region'].attrs['label_data'] 
             patches = []
@@ -293,6 +292,17 @@ def filter_patches_exclude_anno(file_path,level=1,patch_size=256):
                 
             print("patch {} ok".format(file_name))
 
+def judge_patch_anno(coord,mask_data=None,scale=1,patch_size=64,thres_hold=3):
+    """Judge if patch has annotation data"""
+    
+    coord_x = int(coord[0]/scale)
+    coord_y = int(coord[1]/scale)
+    mask_data_item = mask_data[coord_y:coord_y+patch_size,coord_x:coord_x+patch_size]
+    # No more mask data,then not has annotation data
+    if np.sum(mask_data_item>0)<thres_hold:
+        return False
+    return True   
+
 def build_normal_patches_image(file_path,level=1,patch_size=64):
     """Build images of normal region in wsi"""
     
@@ -310,27 +320,29 @@ def build_normal_patches_image(file_path,level=1,patch_size=64):
         save_path = os.path.join(file_path,"tumor_patch_img/0",file_name)
         if not os.path.exists(save_path):
             os.mkdir(save_path)
+        print("process file:{}".format(patch_file_path))
         with h5py.File(patch_file_path, "a") as f:
+            if not "coords" in f:
+                print("coords not in:{}".format(file_name))  
+                continue          
             coords = f['coords'][:]
             for idx,coord in enumerate(coords):
-                coord_x = int(coord[0]/scale)
-                coord_y = int(coord[1]/scale)
-                mask_data_item = mask_data[coord_y:coord_y+patch_size,coord_x:coord_x+patch_size]
-                if np.sum(mask_data_item>0)>3:
+                # Ignore annotation patches data
+                if judge_patch_anno(coord,mask_data=mask_data,scale=scale,patch_size=patch_size):
                     continue
                 crop_img = np.array(wsi.read_region(coord, level, (patch_size,patch_size)).convert("RGB"))
                 crop_img = cv2.cvtColor(crop_img,cv2.COLOR_RGB2BGR) 
                 save_file_path = os.path.join(save_path,"{}.jpg".format(idx))
                 cv2.imwrite(save_file_path,crop_img)
-                print("write {} image ok:{}".format(file_name,idx))
+            print("write image ok:{}".format(file_name))
                                                
 if __name__ == '__main__':   
-    file_path = "/home/bavon/datasets/wsi/hsil"
+    file_path = "/home/bavon/datasets/wsi/lsil"
     # align_xml_svs(file_path) 
     # build_data_csv(file_path)
     # crop_with_annotation(file_path)
-    build_annotation_patches(file_path)
+    # build_annotation_patches(file_path)
     # aug_annotation_patches(file_path)
     # filter_patches_exclude_anno(file_path)
-    # build_normal_patches_image(file_path)
+    build_normal_patches_image(file_path)
     
