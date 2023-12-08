@@ -1,7 +1,7 @@
 {
   "model": "resnet50",
-  "batch_size": 64,
-  "image_size": 64,
+  "batch_size": 16,
+  "image_size": 16,
   "patch_level": 1,
   "crop_size": 224,
   "normalize": "True",
@@ -17,7 +17,7 @@
   "epochs": 500,
   "log_every": 5,
   "num_workers": 5,
-  "load_weight": true,
+  "load_weight": false,
   "model_name" : "resnet50_level1",
   "work_dir": "results"
 }
