@@ -12,7 +12,8 @@ from scipy import stats
 from torch.utils.data import Dataset
 import h5py
 
-from utils.utils import generate_split, nth
+from clam.utils.utils import generate_split, nth
+from utils.constance import get_combine_label_with_type,get_combine_label_dict
 
 def save_splits(split_datasets, column_keys, filename, boolean_style=False):
 	splits = [split_datasets[i].slide_data['slide_id'] for i in range(len(split_datasets))]
@@ -366,5 +367,75 @@ class Generic_Split(Generic_MIL_Dataset):
 	def __len__(self):
 		return len(self.slide_data)
 		
+
+class Combine_MIL_Dataset(Generic_WSI_Classification_Dataset):
+	"""Custom Own dataset, Combine multiple type folders"""
+	
+	def __init__(self,
+		data_dir, 
+		mode="train",
+		shuffle = False, 
+		seed = 7, 
+		print_info = True,
+		patient_strat=False,
+		label_col = None,
+		patient_voting = 'max',		
+		**kwargs):
+	
+		self.data_dir = data_dir
+		self.use_h5 = False
+		
+		self.shuffle = shuffle
+		self.label_dict =  get_combine_label_dict()
+		self.num_classes = len(set(self.label_dict.values()))
+		self.seed = seed
+		self.print_info = print_info
+		self.patient_strat = patient_strat
+		self.train_ids, self.val_ids, self.test_ids  = (None, None, None)
+		
+		if not label_col:
+			label_col = 'label'
+		self.label_col = label_col
+		
+		if mode=="train":
+			csv_path = os.path.join(self.data_dir,"train.csv")
+		if mode=="valid":
+			csv_path = os.path.join(self.data_dir,"valid.csv")		
+		if mode=="test":
+			csv_path = os.path.join(self.data_dir,"test.csv")	
+							
+		self.slide_data = pd.read_csv(csv_path)
+		self.patient_data_prep(patient_voting)
+		self.cls_ids_prep()
+
+		if print_info:
+			self.summarize()
+	
+			
+	
+	def load_from_h5(self, toggle):
+		self.use_h5 = toggle
+
+	def __getitem__(self, idx):
+		
+		slide_id = self.slide_data['slide_id'].values[idx]
+		slide_id = slide_id.split(".")[0]
+		label = self.slide_data['label'].values[idx]
+		type = self.slide_data['type'].values[idx]
+		features_path = os.path.join(self.data_dir,"features")
+
+		if not self.use_h5:
+			full_path = os.path.join(features_path, 'pt_files', type,'{}.pt'.format(slide_id))
+			features = torch.load(full_path)
+			return features, label
+
+		else:
+			full_path = os.path.join(features_path,'h5_files',type,'{}.h5'.format(slide_id))
+			with h5py.File(full_path,'r') as hdf5_file:
+				features = hdf5_file['features'][:]
+				coords = hdf5_file['coords'][:]
+
+			features = torch.from_numpy(features)
+			return features, label, coords
 
 

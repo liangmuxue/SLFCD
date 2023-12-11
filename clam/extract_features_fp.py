@@ -98,6 +98,8 @@ if __name__ == '__main__':
 	file_name = get_last_ck_file(checkpoint_path)
 	checkpoint_path_file = "{}/{}".format(checkpoint_path,file_name)
 	model = CoolSystem.load_from_checkpoint(checkpoint_path_file).to(device)
+	# Remove Fc layer
+	model = torch.nn.Sequential(*(list(model.model.children())[:-1]))
 	
 	# print_network(model)
 	if torch.cuda.device_count() > 1:
@@ -141,6 +143,7 @@ if __name__ == '__main__':
 		print('features size: ', features.shape)
 		print('coordinates size: ', file['coords'].shape)
 		features = torch.from_numpy(features)
+		features = features[:,:,0,0]
 		torch.save(features, fea_file_path)
 
 

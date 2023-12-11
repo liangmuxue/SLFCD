@@ -8,7 +8,7 @@ import math
 # internal imports
 from clam.utils.file_utils import save_pkl, load_pkl
 from clam.utils.core_utils import train
-from datasets.dataset_generic import Generic_WSI_Classification_Dataset, Generic_MIL_Dataset
+from clam.datasets.dataset_generic import Combine_MIL_Dataset
 
 import torch
 from torch.utils.data import DataLoader, sampler
@@ -18,6 +18,32 @@ import torch.nn.functional as F
 import pandas as pd
 import numpy as np
 
+def return_splits(data_dir):
+    train_dataset = Combine_MIL_Dataset(
+                            data_dir= data_dir,
+                            mode="train",
+                            shuffle = False, 
+                            seed = args.seed, 
+                            print_info = True,
+                            patient_strat= False,
+                            ignore=[])
+    valid_dataset = Combine_MIL_Dataset(
+                            data_dir= data_dir,
+                            mode="valid",
+                            shuffle = False, 
+                            seed = args.seed, 
+                            print_info = True,
+                            patient_strat= False,
+                            ignore=[])       
+    test_dataset = Combine_MIL_Dataset(
+                            data_dir= data_dir,
+                            mode="test",
+                            shuffle = False, 
+                            seed = args.seed, 
+                            print_info = True,
+                            patient_strat= False,
+                            ignore=[])           
+    return train_dataset, valid_dataset, test_dataset
 
 def main(args):
     # create results directory if necessary
@@ -40,8 +66,7 @@ def main(args):
     folds = np.arange(start, end)
     for i in folds:
         seed_torch(args.seed)
-        train_dataset, val_dataset, test_dataset = dataset.return_splits(from_id=False, 
-                csv_path='{}/splits_{}.csv'.format(args.split_dir, i))
+        train_dataset, val_dataset, test_dataset = return_splits(args.data_dir)
         
         datasets = (train_dataset, val_dataset, test_dataset)
         results, test_auc, val_auc, test_acc, val_acc  = train(datasets, i, args)
@@ -64,7 +89,7 @@ def main(args):
 
 # Generic training settings
 parser = argparse.ArgumentParser(description='Configurations for WSI Training')
-parser.add_argument('--data_root_dir', type=str, default=None, 
+parser.add_argument('--data_dir', type=str, default=None, 
                     help='data directory')
 parser.add_argument('--max_epochs', type=int, default=200,
                     help='maximum number of epochs to train (default: 200)')
@@ -80,9 +105,6 @@ parser.add_argument('--k', type=int, default=10, help='number of folds (default:
 parser.add_argument('--k_start', type=int, default=-1, help='start fold (default: -1, last fold)')
 parser.add_argument('--k_end', type=int, default=-1, help='end fold (default: -1, first fold)')
 parser.add_argument('--results_dir', default='./results', help='results directory (default: ./results)')
-parser.add_argument('--split_dir', type=str, default=None, 
-                    help='manually specify the set of splits to use, ' 
-                    +'instead of infering from the task and label_frac argument (default: None)')
 parser.add_argument('--log_data', action='store_true', default=False, help='log data using tensorboard')
 parser.add_argument('--testing', action='store_true', default=False, help='debugging tool')
 parser.add_argument('--early_stopping', action='store_true', default=False, help='enable early stopping')
@@ -143,56 +165,21 @@ settings = {'num_splits': args.k,
             'opt': args.opt}
 
 if args.model_type in ['clam_sb', 'clam_mb']:
-   settings.update({'bag_weight': args.bag_weight,
+    settings.update({'bag_weight': args.bag_weight,
                     'inst_loss': args.inst_loss,
                     'B': args.B})
 
+args.n_classes=2
+
 print('\nLoad Dataset')
 
-if args.task == 'task_1_tumor_vs_normal':
-    args.n_classes=2
-    dataset = Generic_MIL_Dataset(csv_path = 'dataset_csv/tumor_vs_normal_dummy_clean.csv',
-                            data_dir= os.path.join(args.data_root_dir, 'tumor_vs_normal_resnet_features'),
-                            shuffle = False, 
-                            seed = args.seed, 
-                            print_info = True,
-                            label_dict = {'normal_tissue':0, 'tumor_tissue':1},
-                            patient_strat=False,
-                            ignore=[])
 
-elif args.task == 'task_2_tumor_subtyping':
-    args.n_classes=3
-    dataset = Generic_MIL_Dataset(csv_path = 'dataset_csv/tumor_subtyping_dummy_clean.csv',
-                            data_dir= os.path.join(args.data_root_dir, 'tumor_subtyping_resnet_features'),
-                            shuffle = False, 
-                            seed = args.seed, 
-                            print_info = True,
-                            label_dict = {'subtype_1':0, 'subtype_2':1, 'subtype_3':2},
-                            patient_strat= False,
-                            ignore=[])
-
-    if args.model_type in ['clam_sb', 'clam_mb']:
-        assert args.subtyping 
-        
-else:
-    raise NotImplementedError
-    
 if not os.path.isdir(args.results_dir):
     os.mkdir(args.results_dir)
 
 args.results_dir = os.path.join(args.results_dir, str(args.exp_code) + '_s{}'.format(args.seed))
 if not os.path.isdir(args.results_dir):
     os.mkdir(args.results_dir)
-
-if args.split_dir is None:
-    args.split_dir = os.path.join('splits', args.task+'_{}'.format(int(args.label_frac*100)))
-else:
-    args.split_dir = os.path.join('splits', args.split_dir)
-
-print('split_dir: ', args.split_dir)
-assert os.path.isdir(args.split_dir)
-
-settings.update({'split_dir': args.split_dir})
 
 
 with open(args.results_dir + '/experiment_{}.txt'.format(args.exp_code), 'w') as f:

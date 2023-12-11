@@ -1,22 +1,39 @@
-Êı¾İ×ÜÄ¿Â¼£º/home/bavon/datasets/wsi/hsil
+ä¸€  ç¬¬ä¸€é˜¶æ®µå‡†å¤‡
 
-1 ¹æÕûÎÄ¼şÃüÃûÒÔ¼°xml¿½±´
-  data_prepare.py µÄ align_xml_svs ·½·¨
+æ•°æ®æ€»ç›®å½•ï¼š/home/bavon/datasets/wsi/hsil
 
-2 Éú³ÉnormalÇĞÆ¬£¨Ä¬ÈÏlevel1£©
+1 è§„æ•´æ–‡ä»¶å‘½åä»¥åŠxmlæ‹·è´
+  data_prepare.py çš„ align_xml_svs æ–¹æ³•
+
+2 ç”Ÿæˆnormalåˆ‡ç‰‡ï¼ˆé»˜è®¤level1ï¼‰
   create_patches_fp.py
-  ÊäÈëÄ¿Â¼ data Êä³öÄ¿Â¼ patches_level1
+  è¾“å…¥ç›®å½• data è¾“å‡ºç›®å½• patches_level1
 
-3 xml±ê×¢ÎÄ¼ş×ªjson 
+3 xmlæ ‡æ³¨æ–‡ä»¶è½¬json 
   utexml2json2.py
    
 4 tumor_mask.py
-	Êä³öÄ¿Â¼ tumor_mask_level1
+	è¾“å‡ºç›®å½• tumor_mask_level1
 	
-5 Éú³ÉÑµÁ·ºÍ²âÊÔÊı¾İ¶ÔÕÕ±í csv
-  data_prepare.py µÄ build_data_csv ·½·¨
+5 ç”Ÿæˆè®­ç»ƒå’Œæµ‹è¯•æ•°æ®å¯¹ç…§è¡¨ csv
+  data_prepare.py çš„ build_data_csv æ–¹æ³•
   
-6 Éú³É±ê×¢¶ÔÓ¦µÄÍ¼Æ¬patch
-  data_prepare.py µÄ crop_with_annotation ÒÔ¼° build_annotation_patches ·½·¨  
-  Êä³öÄ¿Â¼ tumor_patch_img
-  
+6 ç”Ÿæˆæ ‡æ³¨å¯¹åº”çš„å›¾ç‰‡patch
+  data_prepare.py çš„ crop_with_annotation ä»¥åŠ build_annotation_patches æ–¹æ³•  
+  è¾“å‡ºç›®å½• tumor_patch_img
+
+7 ç”Ÿæˆæœªæ ‡æ³¨åŒºåŸŸå¯¹åº”çš„å›¾ç‰‡patch
+  data_prepare.py çš„ build_normal_patches_image æ–¹æ³•  
+  è¾“å‡ºç›®å½• tumor_patch_img
+    
+8 è®­ç»ƒ
+  train_with_clamdata.py    
+    
+äºŒ ç¬¬äºŒé˜¶æ®µå‡†å¤‡
+
+1 ç”Ÿæˆpatchç‰¹å¾å€¼
+  extract_features_fp.py
+  å‚æ•° --data_dir /home/bavon/datasets/wsi --types 'hsil','lsil' --feat_dir /home/bavon/datasets/wsi/combine/features --batch_size 256 --slide_ext .svs
+  è¾“å‡ºç›®å½• /home/bavon/datasets/wsi/combine/features
+
+2 ç”Ÿæˆè®­ç»ƒå’Œæµ‹è¯•æ•°æ®å¯¹ç…§è¡¨ csv

@@ -7,7 +7,7 @@ import json
 import openslide
 import cv2
 import h5py
-from utils.constance import get_label_with_group_code
+from utils.constance import get_combine_label_with_type,get_combine_label_dict
 from utils.wsi_img_viz import viz_crop_patch
 
 from visdom import Visdom
@@ -335,7 +335,52 @@ def build_normal_patches_image(file_path,level=1,patch_size=64):
                 save_file_path = os.path.join(save_path,"{}.jpg".format(idx))
                 cv2.imwrite(save_file_path,crop_img)
             print("write image ok:{}".format(file_name))
-                                               
+
+def combine_mul_dataset_csv(file_path,types):
+    """Combine multiple tumor type csv,To: train,valid,test"""
+    
+    combine_train_split = None
+    combine_valid_split = None
+    for type in types:
+        type_csv_train = os.path.join(file_path,type,"train.csv")
+        train_split = pd.read_csv(type_csv_train)
+        train_split["label"] = get_combine_label_with_type(type)
+        train_split.insert(train_split.shape[1], 'type', type)
+        if combine_train_split is None:
+            combine_train_split = train_split
+        else:
+            combine_train_split = pd.concat([combine_train_split,train_split])
+
+        type_csv_valid = os.path.join(file_path,type,"valid.csv")
+        valid_split = pd.read_csv(type_csv_valid)
+        # Reset label value
+        valid_split["label"] = get_combine_label_with_type(type)
+        # Add type column
+        valid_split.insert(valid_split.shape[1], 'type', type)
+        if combine_valid_split is None:
+            combine_valid_split = valid_split
+        else:
+            combine_valid_split = pd.concat([combine_valid_split,valid_split])        
+    # Add patient case column
+    combine_train_split.reset_index(inplace=True)
+    combine_valid_split.reset_index(inplace=True)
+    combine_train_split['case_id'] = combine_train_split.index
+    combine_valid_split['case_id'] = combine_valid_split.index
+    # split valid to valid and test
+    size = combine_valid_split.shape[0]
+    sp_size = int(size * 0.6)
+    combine_valid_sp = combine_valid_split.iloc[:sp_size]
+    combine_test_sp = combine_valid_split.iloc[sp_size:]
+           
+    output_path = os.path.join(file_path,"combine")
+    train_file_path = os.path.join(output_path,"train.csv")
+    valid_file_path = os.path.join(output_path,"valid.csv")
+    test_file_path = os.path.join(output_path,"test.csv")
+    combine_train_split.to_csv(train_file_path)
+    combine_valid_split.to_csv(valid_file_path)
+    combine_test_sp.to_csv(test_file_path)
+    
+                                                  
 if __name__ == '__main__':   
     file_path = "/home/bavon/datasets/wsi/lsil"
     # align_xml_svs(file_path) 
@@ -344,5 +389,7 @@ if __name__ == '__main__':
     # build_annotation_patches(file_path)
     # aug_annotation_patches(file_path)
     # filter_patches_exclude_anno(file_path)
-    build_normal_patches_image(file_path)
+    # build_normal_patches_image(file_path)
+    types = ["hsil","lsil"]
+    combine_mul_dataset_csv("/home/bavon/datasets/wsi",types)
     
