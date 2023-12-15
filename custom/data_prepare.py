@@ -7,7 +7,7 @@ import json
 import openslide
 import cv2
 import h5py
-from utils.constance import get_label_with_group_code
+from utils.constance import get_label_with_group_code,get_combine_label_with_type
 from utils.wsi_img_viz import viz_crop_patch
 
 from visdom import Visdom
