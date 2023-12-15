@@ -2,7 +2,7 @@
 from wsi_core.WholeSlideImage import WholeSlideImage
 from wsi_core.wsi_utils import StitchCoords
 from wsi_core.batch_process_utils import initialize_df
-# other imports
+# other importsl
 import os
 import numpy as np
 import time
@@ -208,6 +208,9 @@ def seg_and_patch(source, save_dir, patch_save_dir, mask_save_dir, stitch_save_d
 			current_patch_params.update({'patch_level': patch_level, 'patch_size': patch_size, 'step_size': step_size, 
 										 'save_path': patch_save_dir})
 			file_path, patch_time_elapsed = patching(WSI_object = WSI_object,  **current_patch_params,)
+			if file_path is None:
+				df.loc[idx, 'status'] = 'failed_seg'
+				continue				
 		
 		stitch_time_elapsed = -1
 		if stitch:

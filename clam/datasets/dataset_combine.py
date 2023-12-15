@@ -76,6 +76,12 @@ class Whole_Slide_Bag_COMBINE(Dataset):
 		# loop all patch files,and combine the coords data
 		for svs_file in split_data:
 			single_name = svs_file.split(".")[0]
+			if single_name == '62-CG23_14933-02':
+				continue
+			if single_name == '98-CG23_19585-02':
+				continue
+			if single_name == '86-CG23_18818-01':
+				continue
 			file_names.append(single_name)
 			patch_file = os.path.join(file_path,patch_path,single_name + ".h5")	
 			wsi_file = os.path.join(file_path,"data",svs_file)	
@@ -84,7 +90,12 @@ class Whole_Slide_Bag_COMBINE(Dataset):
 			wsi_data[single_name] = openslide.open_slide(wsi_file)
 			scale = wsi_data[single_name].level_downsamples[patch_level]
 			with h5py.File(patch_file, "r") as f:
-				print(patch_file)
+				print(os.path.basename(patch_file))
+				ignore_file = os.path.basename(patch_file)
+				if ignore_file == '62-CG23_14933-02.h5':
+					continue
+				if single_name == '98-CG23_19585-02':
+					continue
 				self.patch_coords = np.array(f['coords'])
 				patch_level = f['coords'].attrs['patch_level']
 				patch_size = f['coords'].attrs['patch_size']
@@ -107,11 +118,13 @@ class Whole_Slide_Bag_COMBINE(Dataset):
 					
 			# Annotation patch data
 			for label in get_tumor_label_cate():
+				patch_img_path = None
 				if work_type=="train":
-					# Using augmentation image for validation
-					patch_img_path = os.path.join(file_path,"tumor_patch_img",str(label),"origin")
+					if label == 4 or label == 5:
+						patch_img_path = os.path.join(file_path,"tumor_patch_img",str(label),"output")
+					elif label == 6:
+						patch_img_path = os.path.join(file_path,"tumor_patch_img",str(label),"origin")
 				else:
-					# Using origin image for validation
 					patch_img_path = os.path.join(file_path,"tumor_patch_img",str(label),"origin")
 				file_list = os.listdir(patch_img_path)
 				for file in file_list:
@@ -143,7 +156,7 @@ class Whole_Slide_Bag_COMBINE(Dataset):
 			t = file_path.split("/")
 			try:
 				label = int(t[-3])
-				# label = 1
+				# label = 4
 			except Exception as e:
 				print("sp err:{}".format(t))
 			img_ori = cv2.imread(file_path)

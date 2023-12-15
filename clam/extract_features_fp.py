@@ -98,6 +98,8 @@ if __name__ == '__main__':
 	file_name = get_last_ck_file(checkpoint_path)
 	checkpoint_path_file = "{}/{}".format(checkpoint_path,file_name)
 	model = CoolSystem.load_from_checkpoint(checkpoint_path_file).to(device)
+	# Remove Fc layer
+	model = torch.nn.Sequential(*(list(model.model.children())[:-1]))
 	
 	# print_network(model)
 	if torch.cuda.device_count() > 1:
@@ -112,6 +114,12 @@ if __name__ == '__main__':
 		data_h5_dir = os.path.join(data_path,type,"patches_level1")
 		slide_id = slide_id.split(args.slide_ext)[0]
 		bag_name = slide_id+'.h5'
+		bag_base, _ = os.path.splitext(bag_name)
+		fea_file_path = os.path.join(args.feat_dir, 'pt_files', type,bag_base+'.pt')
+		if os.path.exists(fea_file_path):
+			print("file exists:{}".format(fea_file_path))
+			continue
+				
 		h5_file_path = os.path.join(data_h5_dir, bag_name)
 		slide_file_path = os.path.join(data_slide_dir, slide_id+args.slide_ext)
 		print('\nprogress: {}/{}'.format(bag_candidate_idx, total))
@@ -121,7 +129,7 @@ if __name__ == '__main__':
 			print('skipped {}'.format(slide_id))
 			continue 
 
-		output_path = os.path.join(args.feat_dir, type,'h5_files', bag_name)
+		output_path = os.path.join(args.feat_dir, 'h5_files', type,bag_name)
 		time_start = time.time()
 		wsi = openslide.open_slide(slide_file_path)
 		output_file_path = compute_w_loader(h5_file_path, output_path, wsi, 
@@ -135,8 +143,8 @@ if __name__ == '__main__':
 		print('features size: ', features.shape)
 		print('coordinates size: ', file['coords'].shape)
 		features = torch.from_numpy(features)
-		bag_base, _ = os.path.splitext(bag_name)
-		torch.save(features, os.path.join(args.feat_dir, type,'pt_files', bag_base+'.pt'))
+		features = features[:,:,0,0]
+		torch.save(features, fea_file_path)
 
 
 
