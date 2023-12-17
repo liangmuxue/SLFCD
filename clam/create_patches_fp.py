@@ -2,7 +2,7 @@
 from wsi_core.WholeSlideImage import WholeSlideImage
 from wsi_core.wsi_utils import StitchCoords
 from wsi_core.batch_process_utils import initialize_df
-# other imports
+# other importsl
 import os
 import numpy as np
 import time

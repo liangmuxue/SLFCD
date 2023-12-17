@@ -7,7 +7,7 @@ import json
 import openslide
 import cv2
 import h5py
-from utils.constance import get_combine_label_with_type,get_combine_label_dict
+from utils.constance import get_label_with_group_code,get_combine_label_with_type,get_combine_label_dict
 from utils.wsi_img_viz import viz_crop_patch
 
 from visdom import Visdom
@@ -110,8 +110,9 @@ def crop_with_annotation(file_path,level=1):
                 del f["crop_region"]
             f.create_dataset('crop_region', data=np.array(region_data)) 
             f['crop_region'].attrs['label_data'] = label_data
-        
-def patch_anno_img(xywh,patch_size=256,mask_threhold=0.9,mask_data=None,scale=4,file_path=None,label=1,file_name=None,index=0,level=1,wsi=None):
+
+def patch_anno_img_lsil(xywh,mask_threhold,overlap_rate,is_edge_judge=False,patch_size=256,
+                   mask_data=None,scale=4,file_path=None,label=1,file_name=None,index=0,level=1,wsi=None):
     """Crop annotation image with patch size"""
     
     tumor_patch_path = os.path.join(file_path,"tumor_patch_img")
@@ -131,25 +132,27 @@ def patch_anno_img(xywh,patch_size=256,mask_threhold=0.9,mask_data=None,scale=4,
         cv2.imwrite(tumor_patch_file_path,img_data)
             
     # Ignor small image
-    if width<patch_size or height<patch_size:
-        return None
+    if not is_edge_judge:
+        if width<patch_size or height<patch_size:
+            return None
         # ext_w = patch_size - width
         # ext_h = patch_size - height
         # region = [int(start_x - ext_w/2),int(end_x + ext_w/2),int(start_y - ext_h/2),int(end_y + ext_h/2)]
         # write_to_disk(region)
         # return np.expand_dims(np.array(region),axis=0)
     
-    def step_crop(row_index,column_index,overlap_rate=0.3):
+    def step_crop(row_index,column_index,overlap_rate):
         """Overlap crop image,Stopping crop when cross the border refer to patch length"""
         x_start = int(start_x + patch_size * column_index * overlap_rate)
         x_end = x_start + patch_size
         y_start = int(start_y + patch_size * row_index * overlap_rate)
         y_end = y_start + patch_size    
         
-        if y_start>end_y:
-            return None,-1         
-        if x_start>end_x:
-            return None,0
+        if not is_edge_judge:
+            if y_start>end_y:
+                return None,-1         
+            if x_start>end_x:
+                return None,0
        
         patch_data = [x_start,x_end,y_start,y_end]
         return patch_data,0
@@ -161,7 +164,7 @@ def patch_anno_img(xywh,patch_size=256,mask_threhold=0.9,mask_data=None,scale=4,
     while True:
         column = 0
         while True:
-            patch_region,flag = step_crop(row,column)
+            patch_region,flag = step_crop(row,column,overlap_rate)
             # If cross the width border, then switch to next row
             if patch_region is None:
                 break
@@ -186,15 +189,97 @@ def patch_anno_img(xywh,patch_size=256,mask_threhold=0.9,mask_data=None,scale=4,
         patch_regions = np.array([])
     return patch_regions
 
-def build_annotation_patches(file_path,level=1,patch_size=16):
+        
+def patch_anno_img(xywh,mask_threhold,overlap_rate,is_edge_judge=False,patch_size=256,
+                   mask_data=None,scale=4,file_path=None,label=1,file_name=None,index=0,level=1,wsi=None):
+    """Crop annotation image with patch size"""
+    
+    tumor_patch_path = os.path.join(file_path,"tumor_patch_img")
+    
+    start_x,start_y,width,height = xywh
+    start_x = start_x/scale
+    start_y = start_y/scale
+    end_x = start_x + width
+    end_y = start_y + height
+
+    
+    def write_to_disk(patch_region,row=0,column=0):
+        tumor_patch_file_path = os.path.join(tumor_patch_path,"{}/origin/{}_{}{}.jpg".format(label,file_name,row,column))
+        top_left = (int(patch_region[0]*scale),int(patch_region[2]*scale))
+        img_data = wsi.read_region(top_left, level, (patch_size, patch_size)).convert('RGB')
+        img_data = cv2.cvtColor(np.array(img_data), cv2.COLOR_RGB2BGR)    
+        cv2.imwrite(tumor_patch_file_path,img_data)
+            
+    # Ignor small image
+    if not is_edge_judge:
+        if width<patch_size or height<patch_size:
+            return None
+        # ext_w = patch_size - width
+        # ext_h = patch_size - height
+        # region = [int(start_x - ext_w/2),int(end_x + ext_w/2),int(start_y - ext_h/2),int(end_y + ext_h/2)]
+        # write_to_disk(region)
+        # return np.expand_dims(np.array(region),axis=0)
+    
+    def step_crop(row_index,column_index,overlap_rate):
+        """Overlap crop image,Stopping crop when cross the border refer to patch length"""
+        x_start = int(start_x + patch_size * column_index * overlap_rate)
+        x_end = x_start + patch_size
+        y_start = int(start_y + patch_size * row_index * overlap_rate)
+        y_end = y_start + patch_size    
+        
+        if not is_edge_judge:
+            if y_start>end_y:
+                return None,-1         
+            if x_start>end_x:
+                return None,0
+       
+        patch_data = [x_start,x_end,y_start,y_end]
+        return patch_data,0
+
+                    
+    row = 0
+    patch_regions = []
+    # Iterate rows and columns one by one,and crop image by patch size
+    while True:
+        column = 0
+        while True:
+            patch_region,flag = step_crop(row,column,overlap_rate)
+            # If cross the width border, then switch to next row
+            if patch_region is None:
+                break
+            # ReFilter with mask
+            patch_masked = mask_data[patch_region[2]:patch_region[3],patch_region[0]:patch_region[1]]
+            if (np.sum(patch_masked>0)/(patch_size*patch_size))>mask_threhold:
+                patch_regions.append(patch_region)
+                # Save to disk
+                write_to_disk(patch_region,row=row,column=column)
+                # viz_crop_patch(file_path,file_name,xywh,patch_region,viz=viz_debug)
+            # else:
+            #     viz_crop_patch(file_path,file_name,xywh,patch_region)
+            column += 1  
+        # Cross the height border, break
+        if flag==-1:
+            break                 
+        row += 1
+    
+    if len(patch_regions)>0:
+        patch_regions = np.stack(patch_regions)
+    else:
+        patch_regions = np.array([])
+    return patch_regions
+
+
+    
+def build_annotation_patches(file_path,mask_thredhold,overlap_rate,is_edge_judge,level=1,patch_size=64):
     """Load and build positive annotation data"""
     
     patch_path = file_path + "/patches_level{}".format(level)
     wsi_path = file_path + "/data"
     for patch_file in os.listdir(patch_path):
         file_name = patch_file.split(".")[0]
-        # if file_name!="9-CG23_12974_12":
-        #     continue
+        
+        if file_name!="9-CG23_10410_01":
+            continue
         patch_file_path = os.path.join(patch_path,patch_file)
         wsi_file_path = os.path.join(wsi_path,file_name+".svs")
         wsi = openslide.open_slide(wsi_file_path)
@@ -210,11 +295,12 @@ def build_annotation_patches(file_path,level=1,patch_size=16):
             patches = []
             patches_length = 0
             db_keys = []
+            
             for i in range(len(label_data)):
                 region = crop_region[i]
                 label = label_data[i]
                 # Patch for every annotation images,Build patches coordinate data list 
-                patch_data = patch_anno_img(region,mask_data=mask_data,patch_size=patch_size,scale=scale,file_path=file_path,
+                patch_data = patch_anno_img(region,mask_threhold=mask_thredhold,overlap_rate=overlap_rate,is_edge_judge=is_edge_judge,mask_data=mask_data,patch_size=patch_size,scale=scale,file_path=file_path,
                                             file_name=file_name,label=label,index=i,level=level,wsi=wsi)   
                 if patch_data is None:
                     # viz_crop_patch(file_path,file_name,region,None)                    
@@ -234,31 +320,71 @@ def build_annotation_patches(file_path,level=1,patch_size=16):
             f["annotations"].attrs['label_data'] = label_data        
             print("patch {} ok".format(file_name))
 
-def aug_annotation_patches(file_path,level=1):
+
+def build_annotation_patches_lsil(file_path,mask_thredhold,overlap_rate,is_edge_judge,level=1,patch_size=64):
+    
+    patch_path = file_path + "/patches_level{}".format(level)
+    wsi_path = file_path + "/data"
+    for patch_file in os.listdir(patch_path):
+        file_name = patch_file.split(".")[0]
+        # if file_name!="9-CG23_10410_01":
+        #     continue
+        patch_file_path = os.path.join(patch_path,patch_file)
+        wsi_file_path = os.path.join(wsi_path,file_name+".svs")
+        wsi = openslide.open_slide(wsi_file_path)
+        scale = wsi.level_downsamples[level]
+        mask_path = os.path.join(file_path,"tumor_mask_level{}".format(level))
+        npy_file = os.path.join(mask_path,file_name+".npy") 
+        mask_data = np.load(npy_file)
+        save_path = os.path.join(file_path,"tumor_patch_img")
+        if not os.path.exists(save_path):
+            os.mkdir(save_path)
+        with h5py.File(patch_file_path, "a") as f:
+            if not "coords" in f:
+                print("coords not in:{}".format(file_name))
+                continue   
+            coords = f['coords'][:]
+            for idx,coord in enumerate(coords):
+                if judge_patch_anno_lsil(coord,mask_thredhold=mask_thredhold,mask_data=mask_data,scale=scale,patch_size=patch_size):
+                    
+                    crop_img = np.array(wsi.read_region(coord, level, (patch_size,patch_size)).convert("RGB"))
+                    crop_img = cv2.cvtColor(crop_img,cv2.COLOR_RGB2BGR) 
+                    # save_file_path = os.path.join(save_path,"{}.jpg".format(idx))
+                    label = label_patch_anno(coord,mask_data=mask_data,scale=scale,patch_size=patch_size)
+                    save_file_path = os.path.join(save_path,"{}/origin/{}_{}.jpg".format(label,file_name,idx))
+                    cv2.imwrite(save_file_path,crop_img)
+            print("write image ok:{}".format(file_name))
+    
+
+def aug_annotation_patches(file_path,type,number,level=1):
     import Augmentor
     tumor_patch_path = os.path.join(file_path,"tumor_patch_img")
-    for label in [1,2,3]:
+    if type == 'lsil':
+        labels = [4,5]
+    elif type == 'hsil':
+        labels = [1,2,3]
+    for label in labels:
         img_path = os.path.join(tumor_patch_path,str(label),"origin")
         target_img_path = os.path.join(tumor_patch_path,str(label),"output")
         p = Augmentor.Pipeline(img_path,output_directory=target_img_path)
                  
         p.rotate(probability=0.7, max_left_rotation=10, max_right_rotation=10)
-        p.sample(200)
+        p.sample(number)
         p.process()
         p.zoom_random(probability=1, percentage_area=0.8)
-        p.sample(200)
+        p.sample(number)
         p.process()
         p.random_contrast(probability=1, min_factor=0.8, max_factor=1.2)
-        p.sample(200)
+        p.sample(number)
         p.process()
         p.flip_left_right(probability=0.5)
-        p.sample(200)
+        p.sample(number)
         p.process()
         p.flip_top_bottom(probability=0.5)
-        p.sample(200)
+        p.sample(number)
         p.process()
         p.random_brightness(probability=1, min_factor=0.7, max_factor=1.2)
-        p.sample(200)
+        p.sample(number)
         p.process()
                                     
 def filter_patches_exclude_anno(file_path,level=1,patch_size=256):
@@ -295,6 +421,18 @@ def filter_patches_exclude_anno(file_path,level=1,patch_size=256):
                 
             print("patch {} ok".format(file_name))
 
+def judge_patch_anno_lsil(coord,mask_thredhold,mask_data=None,scale=1,patch_size=64):
+    """Judge if patch has annotation data"""
+    
+    coord_x = int(coord[0]/scale)
+    coord_y = int(coord[1]/scale)
+    mask_data_item = mask_data[coord_y:coord_y+patch_size,coord_x:coord_x+patch_size]
+    t = mask_thredhold * patch_size * patch_size
+    # No more mask data,then not has annotation data
+    if np.sum(mask_data_item>0)<t:
+        return False
+    return True  
+
 def judge_patch_anno(coord,mask_data=None,scale=1,patch_size=64,thres_hold=3):
     """Judge if patch has annotation data"""
     
@@ -304,9 +442,23 @@ def judge_patch_anno(coord,mask_data=None,scale=1,patch_size=64,thres_hold=3):
     # No more mask data,then not has annotation data
     if np.sum(mask_data_item>0)<thres_hold:
         return False
-    return True   
+    return True  
 
-def build_normal_patches_image(file_path,level=1,patch_size=16):
+def label_patch_anno(coord,mask_data=None,scale=1,patch_size=64):
+    """Judge if patch has annotation data"""
+    
+    coord_x = int(coord[0]/scale)
+    coord_y = int(coord[1]/scale)
+    mask_data_item = mask_data[coord_y:coord_y+patch_size,coord_x:coord_x+patch_size]
+    
+    unique_values, counts = np.unique(mask_data_item[mask_data_item > 0], return_counts=True)
+
+    most_frequent_index = np.argmax(counts)
+
+    most_frequent_value = unique_values[most_frequent_index]
+    return most_frequent_value
+
+def build_normal_patches_image(file_path,level=1,patch_size=64):
     """Build images of normal region in wsi"""
     
     patch_path = file_path + "/patches_level{}".format(level)
@@ -382,17 +534,16 @@ def combine_mul_dataset_csv(file_path,types):
     combine_train_split.to_csv(train_file_path)
     combine_valid_split.to_csv(valid_file_path)
     combine_test_sp.to_csv(test_file_path)
-    
-                                                  
 if __name__ == '__main__':   
     file_path = "/home/bavon/datasets/wsi/lsil"
     # align_xml_svs(file_path) 
     # build_data_csv(file_path)
     # crop_with_annotation(file_path)
-    # build_annotation_patches(file_path)
-    # aug_annotation_patches(file_path)
+    # build_annotation_patches(file_path,0.2,0.8,True)
+    # build_annotation_patches_lsil(file_path,0.2,0.8,True)
+    aug_annotation_patches(file_path,'lsil',33)
     # filter_patches_exclude_anno(file_path)
     # build_normal_patches_image(file_path)
     types = ["hsil","lsil"]
-    combine_mul_dataset_csv("/home/bavon/datasets/wsi",types)
+    combine_mul_dataset_csv("/home/bavon/datasets/wsi",types)   
     
