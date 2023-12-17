@@ -1,3 +1,4 @@
+clam/results/**
 results/**
 **/*.ckpt
 **/*.pyc

@@ -17,7 +17,7 @@ def get_label_with_group_code(group_code):
         
 def get_label_cate():
     cate = [0,1,2,3,4,5,6]
-    cate = [0,1,2,3]
+    # cate = [0,1,2,3]
     return cate        
 
 def get_tumor_label_cate():

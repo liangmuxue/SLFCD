@@ -84,6 +84,7 @@ class Whole_Slide_Bag_COMBINE(Dataset):
 			wsi_data[single_name] = openslide.open_slide(wsi_file)
 			scale = wsi_data[single_name].level_downsamples[patch_level]
 			with h5py.File(patch_file, "r") as f:
+				print(patch_file)
 				self.patch_coords = np.array(f['coords'])
 				patch_level = f['coords'].attrs['patch_level']
 				patch_size = f['coords'].attrs['patch_size']

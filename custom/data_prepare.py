@@ -73,7 +73,10 @@ def crop_with_annotation(file_path,level=1):
     total_file_number = len(os.listdir(json_path))
     for i,json_file in enumerate(os.listdir(json_path)):
         json_file_path = os.path.join(json_path,json_file)  
-        single_name = json_file.split(".")[0]    
+        single_name = json_file.split(".")[0] 
+        print("process:",single_name) 
+        # if single_name!="90-CG23 18908 01":
+        #     continue
         wsi_file = os.path.join(wsi_path,single_name + ".svs")  
         wsi = openslide.open_slide(wsi_file)  
         scale = wsi.level_downsamples[level]
@@ -183,7 +186,7 @@ def patch_anno_img(xywh,patch_size=256,mask_threhold=0.9,mask_data=None,scale=4,
         patch_regions = np.array([])
     return patch_regions
 
-def build_annotation_patches(file_path,level=1,patch_size=64):
+def build_annotation_patches(file_path,level=1,patch_size=16):
     """Load and build positive annotation data"""
     
     patch_path = file_path + "/patches_level{}".format(level)
@@ -303,7 +306,7 @@ def judge_patch_anno(coord,mask_data=None,scale=1,patch_size=64,thres_hold=3):
         return False
     return True   
 
-def build_normal_patches_image(file_path,level=1,patch_size=64):
+def build_normal_patches_image(file_path,level=1,patch_size=16):
     """Build images of normal region in wsi"""
     
     patch_path = file_path + "/patches_level{}".format(level)
