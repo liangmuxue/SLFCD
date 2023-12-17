@@ -1,41 +1,23 @@
 {
   "model": "resnet50",
-<<<<<<< HEAD
   "batch_size": 64,
   "image_size": 64,
-=======
-  "batch_size": 16,
-  "image_size": 16,
->>>>>>> b6ab6b86c98a301b1bb01b70a14c6253d0f069d6
   "patch_level": 1,
   "crop_size": 224,
   "normalize": "True",
   "lr": 0.001,
   "momentum": 0.9,
-<<<<<<< HEAD
-  "data_path": "/home/bavon/datasets/wsi/hsil",
-=======
   "data_path": "/home/bavon/datasets/wsi/lsil",
->>>>>>> b6ab6b86c98a301b1bb01b70a14c6253d0f069d6
   "train_csv": "train.csv",
   "valid_csv": "valid.csv",
   "tumor_mask_path": "tumor_mask_level1",
   "patch_path": "patches_level1",
-<<<<<<< HEAD
-  "data_path_train": "/home/bavon/datasets/wsi/hsil/patches/train",
-  "data_path_valid": "/home/bavon/datasets/wsi/hsil/patches/valid",
-  "epochs": 500,
-  "log_every": 5,
-  "num_workers": 5,
-  "load_weight": true,
-=======
   "data_path_train": "/home/bavon/datasets/wsi/lsil/patches/train",
   "data_path_valid": "/home/bavon/datasets/wsi/lsil/patches/valid",
   "epochs": 500,
   "log_every": 5,
   "num_workers": 5,
   "load_weight": false,
->>>>>>> b6ab6b86c98a301b1bb01b70a14c6253d0f069d6
-  "model_name" : "resnet50_level1",
+  "model_name" : "lc",
   "work_dir": "results"
 }
