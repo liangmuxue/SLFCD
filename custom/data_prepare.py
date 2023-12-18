@@ -11,6 +11,7 @@ from utils.constance import get_label_with_group_code,get_combine_label_with_typ
 from utils.wsi_img_viz import viz_crop_patch
 
 from visdom import Visdom
+# from clam.extract_features_fp import wsi
 viz_debug = Visdom(env="debug", port=8098)
 
 def align_xml_svs(file_path):
@@ -37,26 +38,41 @@ def align_xml_svs(file_path):
         except Exception as e:
             print("copyfile fail,source:{} and target:{}".format(ori_xml_file,tar_xml_file),e)
         
-def build_data_csv(file_path,split_rate=0.7):
+def build_data_csv(file_path,is_normal=False,split_rate=0.7):
     """build train and valid list to csv"""
     
     wsi_path = file_path + "/data"
     xml_path = file_path + "/xml"
-    total_file_number = len(os.listdir(xml_path))
+    if is_normal:
+        total_file_number = len(os.listdir(xml_path))
+    if not is_normal:
+        total_file_number = len(os.listdir(wsi_path))
+    
     train_number = int(total_file_number * split_rate)
     train_file_path = file_path + "/train.csv"
     valid_file_path = file_path + "/valid.csv"
     
     list_train = []
     list_valid = []
-    for i,xml_file in enumerate(os.listdir(xml_path)):
-        
-        single_name = xml_file.split(".")[0]
-        wsi_file = single_name + ".svs"
-        if i < train_number:
-            list_train.append([wsi_file,1])
-        else:
-            list_valid.append([wsi_file,1])
+    if is_normal:
+        for i,xml_file in enumerate(os.listdir(xml_path)):
+            
+            single_name = xml_file.split(".")[0]
+            wsi_file = single_name + ".svs"
+            if i < train_number:
+                list_train.append([wsi_file,1])
+            else:
+                list_valid.append([wsi_file,1])
+    
+    if not is_normal:
+        for i,xml_file in enumerate(os.listdir(wsi_path)):
+            
+            single_name = xml_file.split(".")[0]
+            wsi_file = single_name + ".svs"
+            if i < train_number:
+                list_train.append([wsi_file,1])
+            else:
+                list_valid.append([wsi_file,1])
     
     train_df = pd.DataFrame(np.array(list_train),columns=['slide_id','label'])
     valid_df = pd.DataFrame(np.array(list_valid),columns=['slide_id','label'])
@@ -458,7 +474,7 @@ def label_patch_anno(coord,mask_data=None,scale=1,patch_size=64):
     most_frequent_value = unique_values[most_frequent_index]
     return most_frequent_value
 
-def build_normal_patches_image(file_path,level=1,patch_size=64):
+def build_normal_patches_image(file_path,is_normal,level=1,patch_size=64):
     """Build images of normal region in wsi"""
     
     patch_path = file_path + "/patches_level{}".format(level)
@@ -471,7 +487,8 @@ def build_normal_patches_image(file_path,level=1,patch_size=64):
         scale = wsi.level_downsamples[level]
         mask_path = os.path.join(file_path,"tumor_mask_level{}".format(level))
         npy_file = os.path.join(mask_path,file_name+".npy") 
-        mask_data = np.load(npy_file)
+        if is_normal:
+            mask_data = np.load(npy_file)
         save_path = os.path.join(file_path,"tumor_patch_img/0",file_name)
         if not os.path.exists(save_path):
             os.mkdir(save_path)
@@ -483,8 +500,9 @@ def build_normal_patches_image(file_path,level=1,patch_size=64):
             coords = f['coords'][:]
             for idx,coord in enumerate(coords):
                 # Ignore annotation patches data
-                if judge_patch_anno(coord,mask_data=mask_data,scale=scale,patch_size=patch_size):
-                    continue
+                if is_normal:
+                    if judge_patch_anno(coord,mask_data=mask_data,scale=scale,patch_size=patch_size):
+                        continue
                 crop_img = np.array(wsi.read_region(coord, level, (patch_size,patch_size)).convert("RGB"))
                 crop_img = cv2.cvtColor(crop_img,cv2.COLOR_RGB2BGR) 
                 save_file_path = os.path.join(save_path,"{}.jpg".format(idx))
@@ -536,16 +554,19 @@ def combine_mul_dataset_csv(file_path,types):
     combine_test_sp.to_csv(test_file_path)
                                                    
 if __name__ == '__main__':   
-    file_path = "/home/bavon/datasets/wsi/lsil"
-    # align_xml_svs(file_path) 
-    # build_data_csv(file_path)
+    # file_path = "/home/bavon/datasets/wsi/lsil"
+    # file_path = "/home/bavon/datasets/wsi/normal"
+    # is_normal = False
+    # align_xml_svs(file_path) l 
+    # build_data_csv(file_path,is_normal)
     # crop_with_annotation(file_path)
     # build_annotation_patches(file_path,0.2,0.8,True)
     # build_annotation_patches_lsil(file_path,0.2,0.8,True)
-    aug_annotation_patches(file_path,'lsil',33)
+    # aug_annotation_patches(file_path,'lsil',33)
     # filter_patches_exclude_anno(file_path)
-    # build_normal_patches_image(file_path)
-    types = ["hsil","lsil"]
+    
+    # build_normal_patches_image(file_path,is_normal)
+    types = ["hsil","lsil","normal"]
     combine_mul_dataset_csv("/home/bavon/datasets/wsi",types)   
     
     

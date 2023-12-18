@@ -78,7 +78,7 @@ if __name__ == '__main__':
 
 	print('initializing dataset')
 	
-	cnn_path = 'custom/configs/config.json'
+	cnn_path = 'custom/configs/config_lsil.json'
 	with open(cnn_path, 'r') as f:
 		att_args = json.load(f) 
 	hparams = Namespace(**att_args) 

@@ -35,7 +35,7 @@ def patching(WSI_object, **kwargs):
 	### Start Patch Timer
 	start_time = time.time()
 
-	# Patch
+	# Patch/home/bavon/datasets/wsi/normal/patches_level1
 	file_path = WSI_object.process_contours(**kwargs)
 
 
@@ -55,7 +55,7 @@ def seg_and_patch(source, save_dir, patch_save_dir, mask_save_dir, stitch_save_d
 				  use_default_params = False, 
 				  seg = False, save_mask = True, 
 				  stitch= False, 
-				  patch = False, auto_skip=True, process_list = None):
+				  patch = False, auto_skip=True, process_list = None,is_normal=False):
 	
 
 	wsi_source = os.path.join(source,"data")
@@ -109,11 +109,15 @@ def seg_and_patch(source, save_dir, patch_save_dir, mask_save_dir, stitch_save_d
 		xml_path = os.path.join(source,"xml", xml_file)
 		tumor_mask_file = slide.replace(".svs",".npy")
 		tumor_mask_path = os.path.join(source,"tumor_mask", tumor_mask_file)
-		if not os.path.exists(xml_path):
-			df.loc[idx, 'status'] = 'failed_seg'
-			continue
+		if is_normal:
+			
+			if not os.path.exists(xml_path):
+				df.loc[idx, 'status'] = 'failed_seg'
+				continue
 		WSI_object = WholeSlideImage(full_path)
-		WSI_object.initXML(xml_path)
+		if  os.path.exists(xml_path):
+			
+			WSI_object.initXML(xml_path)
 # WSI_object.initMask(tumor_mask_path)
 
 		if use_default_params:
@@ -260,6 +264,7 @@ parser.add_argument('--patch_level', type=int, default=1,
 					help='downsample level at which to patch')
 parser.add_argument('--process_list',  type = str, default=None,
 					help='name of list of images to process with parameters (.csv)')
+parser.add_argument('--is_normal', default=False, action='store_false')
 
 if __name__ == '__main__':
 	args = parser.parse_args()
@@ -322,4 +327,4 @@ if __name__ == '__main__':
 											seg = args.seg,  use_default_params=False, save_mask = True, 
 											stitch= args.stitch,
 											patch_level=args.patch_level, patch = args.patch,
-											process_list = process_list, auto_skip=args.no_auto_skip)
+											process_list = process_list, auto_skip=args.no_auto_skip,is_normal=args.is_normal)
