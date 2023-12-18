@@ -7,7 +7,7 @@ import json
 import openslide
 import cv2
 import h5py
-from utils.constance import get_label_with_group_code,get_combine_label_with_type
+from utils.constance import get_label_with_group_code,get_combine_label_with_type,get_combine_label_dict
 from utils.wsi_img_viz import viz_crop_patch
 
 from visdom import Visdom
@@ -552,7 +552,6 @@ def combine_mul_dataset_csv(file_path,types):
     combine_train_split.to_csv(train_file_path)
     combine_valid_split.to_csv(valid_file_path)
     combine_test_sp.to_csv(test_file_path)
-                                                   
 if __name__ == '__main__':   
     # file_path = "/home/bavon/datasets/wsi/lsil"
     # file_path = "/home/bavon/datasets/wsi/normal"
@@ -568,5 +567,4 @@ if __name__ == '__main__':
     # build_normal_patches_image(file_path,is_normal)
     types = ["hsil","lsil","normal"]
     combine_mul_dataset_csv("/home/bavon/datasets/wsi",types)   
-    
     
