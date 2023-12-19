@@ -6,8 +6,9 @@ Label_Dict = [{"code":1,"group_code":"D","desc":"CIN 2"},
               {"code":6,"group_code":"C","desc":"Small hollowed-out cells, transparent"},
               ]
 
-Combine_Label_Dict = [{"code":0,"type":"lsil"},
-              {"code":1,"type":"hsil"}
+Combine_Label_Dict = [{"code":1,"type":"lsil"},
+              # {"code":2,"type":"hsil"},
+              {"code":0,"type":"normal"}
               ]
 
 def get_label_with_group_code(group_code):

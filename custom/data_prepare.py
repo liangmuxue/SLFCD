@@ -37,15 +37,15 @@ def align_xml_svs(file_path):
             copyfile(ori_xml_file,tar_xml_file)
         except Exception as e:
             print("copyfile fail,source:{} and target:{}".format(ori_xml_file,tar_xml_file),e)
-        
+
 def build_data_csv(file_path,is_normal=False,split_rate=0.7):
     """build train and valid list to csv"""
     
     wsi_path = file_path + "/data"
     xml_path = file_path + "/xml"
-    if is_normal:
-        total_file_number = len(os.listdir(xml_path))
     if not is_normal:
+        total_file_number = len(os.listdir(xml_path))
+    if is_normal:
         total_file_number = len(os.listdir(wsi_path))
     
     train_number = int(total_file_number * split_rate)
@@ -54,7 +54,7 @@ def build_data_csv(file_path,is_normal=False,split_rate=0.7):
     
     list_train = []
     list_valid = []
-    if is_normal:
+    if not is_normal:
         for i,xml_file in enumerate(os.listdir(xml_path)):
             
             single_name = xml_file.split(".")[0]
@@ -64,11 +64,15 @@ def build_data_csv(file_path,is_normal=False,split_rate=0.7):
             else:
                 list_valid.append([wsi_file,1])
     
-    if not is_normal:
-        for i,xml_file in enumerate(os.listdir(wsi_path)):
+    if is_normal:
+        for i,wsi_files in enumerate(os.listdir(wsi_path)):
             
-            single_name = xml_file.split(".")[0]
+            single_name = wsi_files.split(".")[0]
             wsi_file = single_name + ".svs"
+            if wsi_file == '2+CG2306358-2.svs':
+                continue
+            if wsi_file == '6+CG2309942-2.svs':
+                continue
             if i < train_number:
                 list_train.append([wsi_file,1])
             else:
@@ -555,7 +559,7 @@ def combine_mul_dataset_csv(file_path,types):
 if __name__ == '__main__':   
     # file_path = "/home/bavon/datasets/wsi/lsil"
     # file_path = "/home/bavon/datasets/wsi/normal"
-    # is_normal = False
+    # is_normal = True
     # align_xml_svs(file_path) l 
     # build_data_csv(file_path,is_normal)
     # crop_with_annotation(file_path)
@@ -565,6 +569,6 @@ if __name__ == '__main__':
     # filter_patches_exclude_anno(file_path)
     
     # build_normal_patches_image(file_path,is_normal)
-    types = ["hsil","lsil","normal"]
+    types = ["lsil","normal"]
     combine_mul_dataset_csv("/home/bavon/datasets/wsi",types)   
     
