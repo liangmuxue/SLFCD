@@ -12,7 +12,7 @@ from utils.wsi_img_viz import viz_crop_patch
 
 from visdom import Visdom
 # from clam.extract_features_fp import wsi
-viz_debug = Visdom(env="debug", port=8098)
+# viz_debug = Visdom(env="debug", port=8098)
 
 def align_xml_svs(file_path):
     """Solving the problem of inconsistent naming between SVS and XML"""
@@ -98,6 +98,11 @@ def crop_with_annotation(file_path,level=1):
         # if single_name!="90-CG23 18908 01":
         #     continue
         wsi_file = os.path.join(wsi_path,single_name + ".svs")  
+        print('basename:',os.path.basename(wsi_file))
+        if os.path.basename(wsi_file) == '49.svs':
+            continue
+        if os.path.basename(wsi_file) == '4-CG23 10032 01.svs':
+            continue
         wsi = openslide.open_slide(wsi_file)  
         scale = wsi.level_downsamples[level]
         with open(json_file_path, 'r') as jf:
@@ -298,8 +303,8 @@ def build_annotation_patches(file_path,mask_thredhold,overlap_rate,is_edge_judge
     for patch_file in os.listdir(patch_path):
         file_name = patch_file.split(".")[0]
         
-        if file_name!="9-CG23_10410_01":
-            continue
+        # if file_name!="9-CG23_10410_01":
+        #     continue
         patch_file_path = os.path.join(patch_path,patch_file)
         wsi_file_path = os.path.join(wsi_path,file_name+".svs")
         wsi = openslide.open_slide(wsi_file_path)
@@ -355,6 +360,10 @@ def build_annotation_patches_lsil(file_path,mask_thredhold,overlap_rate,is_edge_
         scale = wsi.level_downsamples[level]
         mask_path = os.path.join(file_path,"tumor_mask_level{}".format(level))
         npy_file = os.path.join(mask_path,file_name+".npy") 
+        if os.path.basename(npy_file) == '14-CG23_10773_01.npy':
+            continue
+        if os.path.basename(npy_file) == '32.npy':
+            continue
         mask_data = np.load(npy_file)
         save_path = os.path.join(file_path,"tumor_patch_img")
         if not os.path.exists(save_path):
@@ -491,6 +500,10 @@ def build_normal_patches_image(file_path,is_normal,level=1,patch_size=64):
         scale = wsi.level_downsamples[level]
         mask_path = os.path.join(file_path,"tumor_mask_level{}".format(level))
         npy_file = os.path.join(mask_path,file_name+".npy") 
+        if os.path.basename(npy_file) == '14-CG23_10773_01.npy':
+            continue
+        if os.path.basename(npy_file) == '32.npy':
+            continue
         if is_normal:
             mask_data = np.load(npy_file)
         save_path = os.path.join(file_path,"tumor_patch_img/0",file_name)
@@ -557,10 +570,11 @@ def combine_mul_dataset_csv(file_path,types):
     combine_valid_split.to_csv(valid_file_path)
     combine_test_sp.to_csv(test_file_path)
 if __name__ == '__main__':   
-    # file_path = "/home/bavon/datasets/wsi/lsil"
+    file_path = "/home/bavon/datasets/wsi/lsil"
     # file_path = "/home/bavon/datasets/wsi/normal"
-    # is_normal = True
-    # align_xml_svs(file_path) l 
+    
+    # align_xml_svs(file_path) 
+    # is_normal = False
     # build_data_csv(file_path,is_normal)
     # crop_with_annotation(file_path)
     # build_annotation_patches(file_path,0.2,0.8,True)
@@ -568,7 +582,8 @@ if __name__ == '__main__':
     # aug_annotation_patches(file_path,'lsil',33)
     # filter_patches_exclude_anno(file_path)
     
-    # build_normal_patches_image(file_path,is_normal)
-    types = ["lsil","normal"]
-    combine_mul_dataset_csv("/home/bavon/datasets/wsi",types)   
+    is_normal = False
+    build_normal_patches_image(file_path,is_normal)
+    # types = ["lsil","normal"]
+    # combine_mul_dataset_csv("/home/bavon/datasets/wsi",types)   
     

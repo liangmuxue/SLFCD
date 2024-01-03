@@ -324,7 +324,8 @@ def main(hparams):
     else:
         if os.path.exists(checkpoint_path):
             shutil.rmtree(checkpoint_path)
-        os.mkdir(checkpoint_path)
+        # os.mkdir(checkpoint_path)
+        os.makedirs(checkpoint_path, exist_ok=True)
         if os.path.exists(log_path):
             shutil.rmtree(log_path)
         os.mkdir(log_path)

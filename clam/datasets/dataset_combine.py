@@ -76,15 +76,19 @@ class Whole_Slide_Bag_COMBINE(Dataset):
 		# loop all patch files,and combine the coords data
 		for svs_file in split_data:
 			single_name = svs_file.split(".")[0]
-			if single_name == '62-CG23_14933-02':
+			if single_name == '62-CG23_14933_02':
 				continue
-			if single_name == '98-CG23_19585-02':
+			if single_name == '98-CG23_19585_02':
 				continue
-			if single_name == '86-CG23_18818-01':
+			if single_name == '86-CG23_18818_01':
 				continue
 			file_names.append(single_name)
 			patch_file = os.path.join(file_path,patch_path,single_name + ".h5")	
 			wsi_file = os.path.join(file_path,"data",svs_file)	
+			if os.path.basename(wsi_file) == '49.svs':
+				continue
+			if os.path.basename(wsi_file) == '4-CG23 10032 01.svs':
+				continue
 			npy_file = single_name +  ".npy"
 			npy_file = os.path.join(mask_path,npy_file)	
 			wsi_data[single_name] = openslide.open_slide(wsi_file)
@@ -92,9 +96,11 @@ class Whole_Slide_Bag_COMBINE(Dataset):
 			with h5py.File(patch_file, "r") as f:
 				print(os.path.basename(patch_file))
 				ignore_file = os.path.basename(patch_file)
-				if ignore_file == '62-CG23_14933-02.h5':
+				if ignore_file == '62-CG23_14933_02.h5':
 					continue
-				if single_name == '98-CG23_19585-02':
+				if ignore_file == '86-CG23_18818_01.h5':
+					continue
+				if ignore_file == '98-CG23_19585_02.h5':
 					continue
 				self.patch_coords = np.array(f['coords'])
 				patch_level = f['coords'].attrs['patch_level']

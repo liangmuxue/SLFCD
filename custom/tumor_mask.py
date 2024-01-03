@@ -31,6 +31,12 @@ def run(wsi_path,npy_path,json_path,level=0):
         single_name = json_file.split(".")[0]
         npy_file = os.path.join(npy_path,single_name+".npy")
         wsi_file_path = os.path.join(wsi_path,single_name+".svs")
+        print("file fail",wsi_file_path)
+        if os.path.basename(wsi_file_path) == '49.svs':
+            continue
+        if os.path.basename(wsi_file_path) == '4-CG23 10032 01.svs':
+            continue
+            
         slide = openslide.OpenSlide(wsi_file_path)
         if len(slide.level_dimensions)<=level:
             print("no level for {},ignore:".format(wsi_file_path))
