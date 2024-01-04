@@ -73,7 +73,8 @@ def run(wsi_path,npy_path,json_path,level=0):
 
 def main():
     logging.basicConfig(level=logging.INFO)
-    file_path = "/home/bavon/datasets/wsi/lsil"
+    # file_path = "/home/bavon/datasets/wsi/lsil"
+    file_path = "/home/bavon/datasets/wsi/normal"
     wsi_path = "{}/data".format(file_path)  
     npy_path = "{}/tumor_mask_level1".format(file_path)   
     json_path = "{}/json".format(file_path)  

@@ -504,7 +504,7 @@ def build_normal_patches_image(file_path,is_normal,level=1,patch_size=64):
             continue
         if os.path.basename(npy_file) == '32.npy':
             continue
-        if is_normal:
+        if not is_normal:
             mask_data = np.load(npy_file)
         save_path = os.path.join(file_path,"tumor_patch_img/0",file_name)
         if not os.path.exists(save_path):
@@ -517,7 +517,7 @@ def build_normal_patches_image(file_path,is_normal,level=1,patch_size=64):
             coords = f['coords'][:]
             for idx,coord in enumerate(coords):
                 # Ignore annotation patches data
-                if is_normal:
+                if not is_normal:
                     if judge_patch_anno(coord,mask_data=mask_data,scale=scale,patch_size=patch_size):
                         continue
                 crop_img = np.array(wsi.read_region(coord, level, (patch_size,patch_size)).convert("RGB"))
@@ -570,11 +570,11 @@ def combine_mul_dataset_csv(file_path,types):
     combine_valid_split.to_csv(valid_file_path)
     combine_test_sp.to_csv(test_file_path)
 if __name__ == '__main__':   
-    file_path = "/home/bavon/datasets/wsi/lsil"
-    # file_path = "/home/bavon/datasets/wsi/normal"
+    # file_path = "/home/bavon/datasets/wsi/lsil"
+    file_path = "/home/bavon/datasets/wsi/normal"
     
     # align_xml_svs(file_path) 
-    # is_normal = False
+    # is_normal = True
     # build_data_csv(file_path,is_normal)
     # crop_with_annotation(file_path)
     # build_annotation_patches(file_path,0.2,0.8,True)
@@ -582,7 +582,7 @@ if __name__ == '__main__':
     # aug_annotation_patches(file_path,'lsil',33)
     # filter_patches_exclude_anno(file_path)
     
-    is_normal = False
+    is_normal = True
     build_normal_patches_image(file_path,is_normal)
     # types = ["lsil","normal"]
     # combine_mul_dataset_csv("/home/bavon/datasets/wsi",types)   
