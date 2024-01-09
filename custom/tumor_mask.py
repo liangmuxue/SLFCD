@@ -32,10 +32,15 @@ def run(wsi_path,npy_path,json_path,level=0):
         npy_file = os.path.join(npy_path,single_name+".npy")
         wsi_file_path = os.path.join(wsi_path,single_name+".svs")
         print("file fail",wsi_file_path)
-        if os.path.basename(wsi_file_path) == '49.svs':
+        #lsil
+        # if os.path.basename(wsi_file_path) == '49.svs':
+        #     continue
+        # if os.path.basename(wsi_file_path) == '4-CG23 10032 01.svs':
+        #     continue
+        #hsil
+        if os.path.basename(wsi_file_path) == '100-CG23_15432_02.svs':
             continue
-        if os.path.basename(wsi_file_path) == '4-CG23 10032 01.svs':
-            continue
+        
             
         slide = openslide.OpenSlide(wsi_file_path)
         if len(slide.level_dimensions)<=level:
@@ -74,7 +79,8 @@ def run(wsi_path,npy_path,json_path,level=0):
 def main():
     logging.basicConfig(level=logging.INFO)
     # file_path = "/home/bavon/datasets/wsi/lsil"
-    file_path = "/home/bavon/datasets/wsi/normal"
+    file_path = "/home/bavon/datasets/wsi/hsil"
+    # file_path = "/home/bavon/datasets/wsi/normal"
     wsi_path = "{}/data".format(file_path)  
     npy_path = "{}/tumor_mask_level1".format(file_path)   
     json_path = "{}/json".format(file_path)  

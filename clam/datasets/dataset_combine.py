@@ -76,18 +76,23 @@ class Whole_Slide_Bag_COMBINE(Dataset):
 		# loop all patch files,and combine the coords data
 		for svs_file in split_data:
 			single_name = svs_file.split(".")[0]
-			if single_name == '62-CG23_14933_02':
-				continue
-			if single_name == '98-CG23_19585_02':
-				continue
-			if single_name == '86-CG23_18818_01':
-				continue
+			#lsil
+			# if single_name == '62-CG23_14933_02':
+			# 	continue
+			# if single_name == '98-CG23_19585_02':
+			# 	continue
+			# if single_name == '86-CG23_18818_01':
+			# 	continue
 			file_names.append(single_name)
 			patch_file = os.path.join(file_path,patch_path,single_name + ".h5")	
 			wsi_file = os.path.join(file_path,"data",svs_file)	
-			if os.path.basename(wsi_file) == '49.svs':
-				continue
-			if os.path.basename(wsi_file) == '4-CG23 10032 01.svs':
+			#lsil
+			# if os.path.basename(wsi_file) == '49.svs':
+			# 	continue
+			# if os.path.basename(wsi_file) == '4-CG23 10032 01.svs':
+			# 	continue
+			#hsil
+			if os.path.basename(wsi_file) == '100-CG23_15432_02.svs':
 				continue
 			npy_file = single_name +  ".npy"
 			npy_file = os.path.join(mask_path,npy_file)	

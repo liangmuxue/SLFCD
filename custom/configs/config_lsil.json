@@ -14,10 +14,10 @@
   "patch_path": "patches_level1",
   "data_path_train": "/home/bavon/datasets/wsi/lsil/patches/train",
   "data_path_valid": "/home/bavon/datasets/wsi/lsil/patches/valid",
-  "epochs": 500,
+  "epochs": 20,
   "log_every": 5,
   "num_workers": 5,
   "load_weight": false,
-  "model_name" : "resnet50_lsil",
+  "model_name" : "resnet50_lsil_0108",
   "work_dir": "results"
 }

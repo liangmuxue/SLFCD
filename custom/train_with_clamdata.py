@@ -44,12 +44,12 @@ parser.add_argument('save_path', default=None, metavar='SAVE_PATH', type=str,
                     help='Path to the saved models')
 parser.add_argument('--num_workers', default=2, type=int, help='number of'
                     ' workers for each data loader, default 2.')
-parser.add_argument('--device_ids', default='0', type=str, help='comma'
+parser.add_argument('--device_ids', default='1', type=str, help='comma'
                     ' separated indices of GPU to use, e.g. 0,1 for using GPU_0'
                     ' and GPU_1, default 0.')
 
-device = 'cuda:0' # torch.device('cuda:0')
-os.environ["CUDA_VISIBLE_DEVICES"] = '0'
+device = 'cuda:1' # torch.device('cuda:0')
+os.environ["CUDA_VISIBLE_DEVICES"] = '1'
 # device = torch.device('cpu')
 
 from utils.vis import vis_data,visdom_data
@@ -328,7 +328,8 @@ def main(hparams):
         os.makedirs(checkpoint_path, exist_ok=True)
         if os.path.exists(log_path):
             shutil.rmtree(log_path)
-        os.mkdir(log_path)
+        # os.mkdir(log_path)
+        os.makedirs(log_path, exist_ok=True)
         
         model = CoolSystem(hparams)
         # data_summarize(model.val_dataloader())
@@ -369,7 +370,8 @@ def data_summarize(dataloader):
     print("label_stat 1:{},2:{},3:{}".format(np.sum(label_stat==1),np.sum(label_stat==2),np.sum(label_stat==3)))
 
 if __name__ == '__main__':
-    cnn_path = 'custom/configs/config_lsil.json'
+    # cnn_path = 'custom/configs/config_lsil.json'
+    cnn_path = 'custom/configs/config_hsil.json'
     with open(cnn_path, 'r') as f:
         args = json.load(f) 
     hyperparams = Namespace(**args)    

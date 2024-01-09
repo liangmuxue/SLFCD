@@ -17,6 +17,9 @@ from utils.file_utils import save_hdf5
 from PIL import Image
 import h5py
 import openslide
+# import sys
+# print("exit")
+# sys.exit()
 from custom.train_with_clamdata import CoolSystem,get_last_ck_file
 
 device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
@@ -122,8 +125,15 @@ if __name__ == '__main__':
 				
 		h5_file_path = os.path.join(data_h5_dir, bag_name)
 		slide_file_path = os.path.join(data_slide_dir, slide_id+args.slide_ext)
+		if os.path.basename(slide_file_path) == '62-CG23_14933_02.svs':
+			continue
+		if os.path.basename(slide_file_path) == '86-CG23_18818_01.svs':
+			continue
+		if os.path.basename(slide_file_path) == '98-CG23_19585_02.svs':
+			continue
+		
 		print('\nprogress: {}/{}'.format(bag_candidate_idx, total))
-		print(slide_id)
+  # print(slide_id)
 
 		if not args.no_auto_skip and slide_id+'.pt' in dest_files:
 			print('skipped {}'.format(slide_id))
@@ -132,6 +142,7 @@ if __name__ == '__main__':
 		output_path = os.path.join(args.feat_dir, 'h5_files', type,bag_name)
 		time_start = time.time()
 		wsi = openslide.open_slide(slide_file_path)
+		print("wsi",wsi)
 		output_file_path = compute_w_loader(h5_file_path, output_path, wsi, 
 		model = model, batch_size = args.batch_size, verbose = 1, print_every = 20, 
 		custom_downsample=args.custom_downsample, target_patch_size=args.target_patch_size)

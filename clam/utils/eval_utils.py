@@ -14,6 +14,7 @@ from sklearn.metrics import roc_auc_score, roc_curve, auc
 from sklearn.preprocessing import label_binarize
 import matplotlib.pyplot as plt
 
+
 def initiate_model(args, ckpt_path):
     print('Init Model')    
     model_dict = {"dropout": args.drop_out, 'n_classes': args.n_classes}
@@ -21,11 +22,11 @@ def initiate_model(args, ckpt_path):
     if args.model_size is not None and args.model_type in ['clam_sb', 'clam_mb']:
         model_dict.update({"size_arg": args.model_size})
     
-    if args.model_type =='clam_sb':
+    if args.model_type == 'clam_sb':
         model = CLAM_SB(**model_dict)
-    elif args.model_type =='clam_mb':
+    elif args.model_type == 'clam_mb':
         model = CLAM_MB(**model_dict)
-    else: # args.model_type == 'mil'
+    else:  # args.model_type == 'mil'
         if args.n_classes > 2:
             model = MIL_fc_mc(**model_dict)
         else:
@@ -45,6 +46,7 @@ def initiate_model(args, ckpt_path):
     model.eval()
     return model
 
+
 def eval(dataset, args, ckpt_path):
     model = initiate_model(args, ckpt_path)
     
@@ -54,6 +56,7 @@ def eval(dataset, args, ckpt_path):
     print('test_error: ', test_error)
     print('auc: ', auc)
     return model, patient_results, test_error, auc, df
+
 
 def summary(model, loader, args):
     acc_logger = Accuracy_Logger(n_classes=args.n_classes)
@@ -113,6 +116,6 @@ def summary(model, loader, args):
 
     results_dict = {'slide_id': slide_ids, 'Y': all_labels, 'Y_hat': all_preds}
     for c in range(args.n_classes):
-        results_dict.update({'p_{}'.format(c): all_probs[:,c]})
+        results_dict.update({'p_{}'.format(c): all_probs[:, c]})
     df = pd.DataFrame(results_dict)
     return patient_results, test_error, auc_score, df, acc_logger

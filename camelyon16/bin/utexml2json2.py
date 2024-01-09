@@ -13,8 +13,8 @@ parser = argparse.ArgumentParser(description='Convert Camelyon16 xml format to'
 
 def run(args):
     
-    # file_path = "/home/bavon/datasets/wsi/hsil"
-    file_path = "/home/bavon/datasets/wsi/lsil"
+    file_path = "/home/bavon/datasets/wsi/hsil"
+    # file_path = "/home/bavon/datasets/wsi/lsil"
     xml_path = os.path.join(file_path,"xml")
     json_path = os.path.join(file_path,"json")
     

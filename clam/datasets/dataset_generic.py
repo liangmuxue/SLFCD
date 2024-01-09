@@ -427,7 +427,7 @@ class Combine_MIL_Dataset(Generic_WSI_Classification_Dataset):
 		if not self.use_h5:
 			full_path = os.path.join(features_path, 'pt_files', type,'{}.pt'.format(slide_id))
 			filename = os.path.basename(full_path)
-			print(filename)
+   # print(filename)
 			features = torch.load(full_path)
 			return features, label
 
