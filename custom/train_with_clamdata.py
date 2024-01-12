@@ -44,7 +44,7 @@ parser.add_argument('save_path', default=None, metavar='SAVE_PATH', type=str,
                     help='Path to the saved models')
 parser.add_argument('--num_workers', default=2, type=int, help='number of'
                     ' workers for each data loader, default 2.')
-parser.add_argument('--device_ids', default='1', type=str, help='comma'
+parser.add_argument('--device_ids', default='0,1', type=str, help='comma'
                     ' separated indices of GPU to use, e.g. 0,1 for using GPU_0'
                     ' and GPU_1, default 0.')
 

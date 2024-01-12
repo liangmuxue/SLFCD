@@ -20,12 +20,13 @@ import openslide
 # import sys
 # print("exit")
 # sys.exit()
-from custom.train_with_clamdata import CoolSystem,get_last_ck_file
+from custom.train_with_clamdata import CoolSystem, get_last_ck_file
 
 device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
 
+
 def compute_w_loader(file_path, output_path, wsi, model,
- 	batch_size = 8, verbose = 0, print_every=20, pretrained=True, 
+ 	batch_size=8, verbose=0, print_every=20, pretrained=True,
 	custom_downsample=1, target_patch_size=-1):
 	"""
 	args:
@@ -38,14 +39,14 @@ def compute_w_loader(file_path, output_path, wsi, model,
 		custom_downsample: custom defined downscale factor of image patches
 		target_patch_size: custom defined, rescaled image size before embedding
 	"""
-	dataset = Whole_Slide_Bag_FP(file_path=file_path, wsi=wsi, pretrained=pretrained, 
+	dataset = Whole_Slide_Bag_FP(file_path=file_path, wsi=wsi, pretrained=pretrained,
 		custom_downsample=custom_downsample, target_patch_size=target_patch_size)
 	x, y = dataset[0]
 	kwargs = {'num_workers': 4, 'pin_memory': True} if device.type == "cuda" else {}
 	loader = DataLoader(dataset=dataset, batch_size=batch_size, **kwargs, collate_fn=collate_features)
 
 	if verbose > 0:
-		print('processing {}: total of {} batches'.format(file_path,len(loader)))
+		print('processing {}: total of {} batches'.format(file_path, len(loader)))
 
 	mode = 'w'
 	for count, (batch, coords) in enumerate(loader):
@@ -58,7 +59,7 @@ def compute_w_loader(file_path, output_path, wsi, model,
 			features = features.cpu().numpy()
 
 			asset_dict = {'features': features, 'coords': coords}
-			save_hdf5(output_path, asset_dict, attr_dict= None, mode=mode)
+			save_hdf5(output_path, asset_dict, attr_dict=None, mode=mode)
 			mode = 'a'
 	
 	return output_path
@@ -67,7 +68,7 @@ def compute_w_loader(file_path, output_path, wsi, model,
 parser = argparse.ArgumentParser(description='Feature Extraction')
 # parser.add_argument('--data_h5_dir', type=str, default=None)
 parser.add_argument('--data_dir', type=str, default=None)
-parser.add_argument('--slide_ext', type=str, default= '.svs')
+parser.add_argument('--slide_ext', type=str, default='.svs')
 parser.add_argument('--types', type=str, default=None)
 parser.add_argument('--feat_dir', type=str, default=None)
 parser.add_argument('--batch_size', type=int, default=256)
@@ -75,7 +76,6 @@ parser.add_argument('--no_auto_skip', default=False, action='store_true')
 parser.add_argument('--custom_downsample', type=int, default=1)
 parser.add_argument('--target_patch_size', type=int, default=-1)
 args = parser.parse_args()
-
 
 if __name__ == '__main__':
 
@@ -88,18 +88,18 @@ if __name__ == '__main__':
 		
 	data_path = args.data_dir
 	types = args.types.split(",")
-	bags_dataset = Dataset_Combine_Bags(data_path,types)
+	bags_dataset = Dataset_Combine_Bags(data_path, types)
 	
 	os.makedirs(args.feat_dir, exist_ok=True)
 	for type in types:
-		os.makedirs(os.path.join(args.feat_dir, 'pt_files',type), exist_ok=True)
-		os.makedirs(os.path.join(args.feat_dir, 'h5_files',type), exist_ok=True)
+		os.makedirs(os.path.join(args.feat_dir, 'pt_files', type), exist_ok=True)
+		os.makedirs(os.path.join(args.feat_dir, 'h5_files', type), exist_ok=True)
 	dest_files = os.listdir(os.path.join(args.feat_dir, 'pt_files'))
 
 	print('loading model checkpoint')
-	checkpoint_path = os.path.join(hparams.work_dir,"checkpoints",hparams.model_name)
+	checkpoint_path = os.path.join(hparams.work_dir, "checkpoints", hparams.model_name)
 	file_name = get_last_ck_file(checkpoint_path)
-	checkpoint_path_file = "{}/{}".format(checkpoint_path,file_name)
+	checkpoint_path_file = "{}/{}".format(checkpoint_path, file_name)
 	model = CoolSystem.load_from_checkpoint(checkpoint_path_file).to(device)
 	# Remove Fc layer
 	model = torch.nn.Sequential(*(list(model.model.children())[:-1]))
@@ -112,19 +112,19 @@ if __name__ == '__main__':
 	total = len(bags_dataset)
 	
 	for bag_candidate_idx in range(total):
-		type,slide_id = bags_dataset[bag_candidate_idx]
-		data_slide_dir = os.path.join(data_path,type,"data")
-		data_h5_dir = os.path.join(data_path,type,"patches_level1")
+		type, slide_id = bags_dataset[bag_candidate_idx]
+		data_slide_dir = os.path.join(data_path, type, "data")
+		data_h5_dir = os.path.join(data_path, type, "patches_level1")
 		slide_id = slide_id.split(args.slide_ext)[0]
-		bag_name = slide_id+'.h5'
+		bag_name = slide_id + '.h5'
 		bag_base, _ = os.path.splitext(bag_name)
-		fea_file_path = os.path.join(args.feat_dir, 'pt_files', type,bag_base+'.pt')
+		fea_file_path = os.path.join(args.feat_dir, 'pt_files', type, bag_base + '.pt')
 		if os.path.exists(fea_file_path):
 			print("file exists:{}".format(fea_file_path))
 			continue
 				
 		h5_file_path = os.path.join(data_h5_dir, bag_name)
-		slide_file_path = os.path.join(data_slide_dir, slide_id+args.slide_ext)
+		slide_file_path = os.path.join(data_slide_dir, slide_id + args.slide_ext)
 		if os.path.basename(slide_file_path) == '62-CG23_14933_02.svs':
 			continue
 		if os.path.basename(slide_file_path) == '86-CG23_18818_01.svs':
@@ -135,16 +135,16 @@ if __name__ == '__main__':
 		print('\nprogress: {}/{}'.format(bag_candidate_idx, total))
   # print(slide_id)
 
-		if not args.no_auto_skip and slide_id+'.pt' in dest_files:
+		if not args.no_auto_skip and slide_id + '.pt' in dest_files:
 			print('skipped {}'.format(slide_id))
 			continue 
 
-		output_path = os.path.join(args.feat_dir, 'h5_files', type,bag_name)
+		output_path = os.path.join(args.feat_dir, 'h5_files', type, bag_name)
 		time_start = time.time()
 		wsi = openslide.open_slide(slide_file_path)
-		print("wsi",wsi)
-		output_file_path = compute_w_loader(h5_file_path, output_path, wsi, 
-		model = model, batch_size = args.batch_size, verbose = 1, print_every = 20, 
+		print("wsi", wsi)
+		output_file_path = compute_w_loader(h5_file_path, output_path, wsi,
+		model=model, batch_size=args.batch_size, verbose=1, print_every=20,
 		custom_downsample=args.custom_downsample, target_patch_size=args.target_patch_size)
 		time_elapsed = time.time() - time_start
 		print('\ncomputing features for {} took {} s'.format(output_file_path, time_elapsed))
@@ -154,8 +154,6 @@ if __name__ == '__main__':
 		print('features size: ', features.shape)
 		print('coordinates size: ', file['coords'].shape)
 		features = torch.from_numpy(features)
-		features = features[:,:,0,0]
+		features = features[:,:, 0, 0]
 		torch.save(features, fea_file_path)
-
-
 
