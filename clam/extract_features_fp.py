@@ -80,8 +80,8 @@ args = parser.parse_args()
 if __name__ == '__main__':
 
 	print('initializing dataset')
-	
-	cnn_path = 'custom/configs/config_lsil.json'
+	#cnn_path = 'custom/configs/config_lsil.json'
+	cnn_path = 'custom/configs/config_hsil.json'
 	with open(cnn_path, 'r') as f:
 		att_args = json.load(f) 
 	hparams = Namespace(**att_args) 
@@ -125,11 +125,15 @@ if __name__ == '__main__':
 				
 		h5_file_path = os.path.join(data_h5_dir, bag_name)
 		slide_file_path = os.path.join(data_slide_dir, slide_id + args.slide_ext)
+		#lsil
 		if os.path.basename(slide_file_path) == '62-CG23_14933_02.svs':
 			continue
 		if os.path.basename(slide_file_path) == '86-CG23_18818_01.svs':
 			continue
 		if os.path.basename(slide_file_path) == '98-CG23_19585_02.svs':
+			continue
+		#hsil
+		if os.path.basename(slide_file_path) == '100-CG23_15432_02.svs':
 			continue
 		
 		print('\nprogress: {}/{}'.format(bag_candidate_idx, total))

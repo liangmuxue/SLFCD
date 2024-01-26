@@ -10,15 +10,17 @@ import argparse
 import pdb
 import pandas as pd
 
-def stitching(file_path, wsi_object, downscale = 64):
+
+def stitching(file_path, wsi_object, downscale=64):
 	start = time.time()
-	heatmap = StitchCoords(file_path, wsi_object, downscale=downscale, bg_color=(0,0,0), alpha=-1, draw_grid=False)
+	heatmap = StitchCoords(file_path, wsi_object, downscale=downscale, bg_color=(0, 0, 0), alpha=-1, draw_grid=False)
 	total_time = time.time() - start
 	
 	return heatmap, total_time
 
-def segment(WSI_object, seg_params = None, filter_params = None, mask_file = None):
-	### Start Seg Timer
+
+def segment(WSI_object, seg_params=None, filter_params=None, mask_file=None):
+	# ## Start Seg Timer
 	start_time = time.time()
 	# Use segmentation file
 	if mask_file is not None:
@@ -27,38 +29,37 @@ def segment(WSI_object, seg_params = None, filter_params = None, mask_file = Non
 	else:
 		WSI_object.segmentTissue(**seg_params, filter_params=filter_params)
 
-	### Stop Seg Timers
+	# ## Stop Seg Timers
 	seg_time_elapsed = time.time() - start_time   
 	return WSI_object, seg_time_elapsed
 
+
 def patching(WSI_object, **kwargs):
-	### Start Patch Timer
+	# ## Start Patch Timer
 	start_time = time.time()
 
 	# Patch/home/bavon/datasets/wsi/normal/patches_level1
 	file_path = WSI_object.process_contours(**kwargs)
 
-
-	### Stop Patch Timer
+	# ## Stop Patch Timer
 	patch_time_elapsed = time.time() - start_time
 	return file_path, patch_time_elapsed
 
 
-def seg_and_patch(source, save_dir, patch_save_dir, mask_save_dir, stitch_save_dir, 
-				  patch_size = 256, step_size = 256, 
-				  seg_params = {'seg_level': -1, 'sthresh': 8, 'mthresh': 7, 'close': 4, 'use_otsu': False,
+def seg_and_patch(source, save_dir, patch_save_dir, mask_save_dir, stitch_save_dir,
+				  patch_size=256, step_size=256,
+				  seg_params={'seg_level':-1, 'sthresh': 8, 'mthresh': 7, 'close': 4, 'use_otsu': False,
 				  'keep_ids': 'none', 'exclude_ids': 'none'},
-				  filter_params = {'a_t':100, 'a_h': 16, 'max_n_holes':8}, 
-				  vis_params = {'vis_level': -1, 'line_thickness': 500},
-				  patch_params = {'use_padding': True, 'contour_fn': 'four_pt'},
-				  patch_level = 0,
-				  use_default_params = False, 
-				  seg = False, save_mask = True, 
-				  stitch= False, 
-				  patch = False, auto_skip=True, process_list = None,is_normal=False):
-	
+				  filter_params={'a_t':100, 'a_h': 16, 'max_n_holes':8},
+				  vis_params={'vis_level':-1, 'line_thickness': 500},
+				  patch_params={'use_padding': True, 'contour_fn': 'four_pt'},
+				  patch_level=0,
+				  use_default_params=False,
+				  seg=False, save_mask=True,
+				  stitch=False,
+				  patch=False, auto_skip=True, process_list=None, is_normal=False):
 
-	wsi_source = os.path.join(source,"data")
+	wsi_source = os.path.join(source, "data")
 	slides = sorted(os.listdir(wsi_source))
 	slides = [slide for slide in slides if os.path.isfile(os.path.join(wsi_source, slide))]
 	if process_list is None:
@@ -92,7 +93,7 @@ def seg_and_patch(source, save_dir, patch_save_dir, mask_save_dir, stitch_save_d
 		slide = process_stack.loc[idx, 'slide_id']
 		if not slide.endswith(".svs"):
 			continue
-		print("\n\nprogress: {:.2f}, {}/{}".format(i/total, i, total))
+		print("\n\nprogress: {:.2f}, {}/{}".format(i / total, i, total))
 		print('processing {}'.format(slide))
 		
 		df.loc[idx, 'process'] = 0
@@ -104,11 +105,11 @@ def seg_and_patch(source, save_dir, patch_save_dir, mask_save_dir, stitch_save_d
 			continue
 
 		# Inialize WSI
-		full_path = os.path.join(source, "data",slide)
-		xml_file = slide.replace(".svs",".xml")
-		xml_path = os.path.join(source,"xml", xml_file)
-		tumor_mask_file = slide.replace(".svs",".npy")
-		tumor_mask_path = os.path.join(source,"tumor_mask", tumor_mask_file)
+		full_path = os.path.join(source, "data", slide)
+		xml_file = slide.replace(".svs", ".xml")
+		xml_path = os.path.join(source, "xml", xml_file)
+		tumor_mask_file = slide.replace(".svs", ".npy")
+		tumor_mask_path = os.path.join(source, "tumor_mask", tumor_mask_file)
 		if is_normal:
 			
 			if not os.path.exists(xml_path):
@@ -131,7 +132,6 @@ def seg_and_patch(source, save_dir, patch_save_dir, mask_save_dir, stitch_save_d
 			current_filter_params = {}
 			current_seg_params = {}
 			current_patch_params = {}
-
 
 			for key in vis_params.keys():
 				if legacy_support and key == 'vis_level':
@@ -197,31 +197,30 @@ def seg_and_patch(source, save_dir, patch_save_dir, mask_save_dir, stitch_save_d
 		df.loc[idx, 'vis_level'] = current_vis_params['vis_level']
 		df.loc[idx, 'seg_level'] = current_seg_params['seg_level']
 
-
 		seg_time_elapsed = -1
 		if seg:
 			WSI_object, seg_time_elapsed = segment(WSI_object, current_seg_params, current_filter_params) 
 
 		if save_mask:
 			mask = WSI_object.visWSI(**current_vis_params)
-			mask_path = os.path.join(mask_save_dir, slide_id+'.jpg')
+			mask_path = os.path.join(mask_save_dir, slide_id + '.jpg')
 			mask.save(mask_path)
 
-		patch_time_elapsed = -1 # Default time
+		patch_time_elapsed = -1  # Default time
 		if patch:
-			current_patch_params.update({'patch_level': patch_level, 'patch_size': patch_size, 'step_size': step_size, 
+			current_patch_params.update({'patch_level': patch_level, 'patch_size': patch_size, 'step_size': step_size,
 										 'save_path': patch_save_dir})
-			file_path, patch_time_elapsed = patching(WSI_object = WSI_object,  **current_patch_params,)
+			file_path, patch_time_elapsed = patching(WSI_object=WSI_object, **current_patch_params,)
 			if file_path is None:
 				df.loc[idx, 'status'] = 'failed_seg'
 				continue				
 		
 		stitch_time_elapsed = -1
 		if stitch:
-			file_path = os.path.join(patch_save_dir, slide_id+'.h5')
+			file_path = os.path.join(patch_save_dir, slide_id + '.h5')
 			if os.path.isfile(file_path):
 				heatmap, stitch_time_elapsed = stitching(file_path, WSI_object, downscale=64)
-				stitch_path = os.path.join(stitch_save_dir, slide_id+'.jpg')
+				stitch_path = os.path.join(stitch_save_dir, slide_id + '.jpg')
 				heatmap.save(stitch_path)
 
 		print("segmentation took {} seconds".format(seg_time_elapsed))
@@ -237,7 +236,7 @@ def seg_and_patch(source, save_dir, patch_save_dir, mask_save_dir, stitch_save_d
 	patch_times /= total
 	stitch_times /= total
 
-	df = df[df["status"]!="failed_seg"]
+	df = df[df["status"] != "failed_seg"]
 	df.to_csv(os.path.join(save_dir, 'process_list_autogen.csv'), index=False)
 	print("average segmentation time in s per slide: {}".format(seg_times))
 	print("average patching time in s per slide: {}".format(patch_times))
@@ -245,24 +244,25 @@ def seg_and_patch(source, save_dir, patch_save_dir, mask_save_dir, stitch_save_d
 		
 	return seg_times, patch_times
 
+
 parser = argparse.ArgumentParser(description='seg and patch')
-parser.add_argument('--source', type = str,
+parser.add_argument('--source', type=str,
 					help='path to folder containing raw wsi image files')
-parser.add_argument('--step_size', type = int, default=256,
+parser.add_argument('--step_size', type=int, default=256,
 					help='step_size')
-parser.add_argument('--patch_size', type = int, default=256,
+parser.add_argument('--patch_size', type=int, default=256,
 					help='patch_size')
 parser.add_argument('--patch', default=False, action='store_true')
 parser.add_argument('--seg', default=False, action='store_true')
 parser.add_argument('--stitch', default=False, action='store_true')
 parser.add_argument('--no_auto_skip', default=True, action='store_false')
-parser.add_argument('--save_dir', type = str,
+parser.add_argument('--save_dir', type=str,
 					help='directory to save processed data')
 parser.add_argument('--preset', default=None, type=str,
 					help='predefined profile of default segmentation and filter parameters (.csv)')
-parser.add_argument('--patch_level', type=int, default=1, 
+parser.add_argument('--patch_level', type=int, default=1,
 					help='downsample level at which to patch')
-parser.add_argument('--process_list',  type = str, default=None,
+parser.add_argument('--process_list', type=str, default=None,
 					help='name of list of images to process with parameters (.csv)')
 parser.add_argument('--is_normal', default=False, action='store_false')
 
@@ -284,10 +284,10 @@ if __name__ == '__main__':
 	print('mask_save_dir: ', mask_save_dir)
 	print('stitch_save_dir: ', stitch_save_dir)
 	
-	directories = {'source': args.source, 
+	directories = {'source': args.source,
 				   'save_dir': args.save_dir,
-				   'patch_save_dir': patch_save_dir, 
-				   'mask_save_dir' : mask_save_dir, 
+				   'patch_save_dir': patch_save_dir,
+				   'mask_save_dir': mask_save_dir,
 				   'stitch_save_dir': stitch_save_dir} 
 
 	for key, val in directories.items():
@@ -295,10 +295,10 @@ if __name__ == '__main__':
 		if key not in ['source']:
 			os.makedirs(val, exist_ok=True)
 
-	seg_params = {'seg_level': -1, 'sthresh': 8, 'mthresh': 7, 'close': 4, 'use_otsu': False,
+	seg_params = {'seg_level':-1, 'sthresh': 8, 'mthresh': 7, 'close': 4, 'use_otsu': False,
 				  'keep_ids': 'none', 'exclude_ids': 'none'}
 	filter_params = {'a_t':100, 'a_h': 16, 'max_n_holes':8}
-	vis_params = {'vis_level': -1, 'line_thickness': 250}
+	vis_params = {'vis_level':-1, 'line_thickness': 250}
 	patch_params = {'use_padding': True, 'contour_fn': 'four_pt'}
 
 	if args.preset:
@@ -323,8 +323,8 @@ if __name__ == '__main__':
 	print(parameters)
 
 	seg_times, patch_times = seg_and_patch(**directories, **parameters,
-											patch_size = args.patch_size, step_size=args.step_size, 
-											seg = args.seg,  use_default_params=False, save_mask = True, 
-											stitch= args.stitch,
-											patch_level=args.patch_level, patch = args.patch,
-											process_list = process_list, auto_skip=args.no_auto_skip,is_normal=args.is_normal)
+											patch_size=args.patch_size, step_size=args.step_size,
+											seg=args.seg, use_default_params=False, save_mask=True,
+											stitch=args.stitch,
+											patch_level=args.patch_level, patch=args.patch,
+											process_list=process_list, auto_skip=args.no_auto_skip, is_normal=args.is_normal)

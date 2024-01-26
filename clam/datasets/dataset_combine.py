@@ -25,13 +25,13 @@ def eval_transforms(pretrained=False):
 		std = (0.229, 0.224, 0.225)
 
 	else:
-		mean = (0.5,0.5,0.5)
-		std = (0.5,0.5,0.5)
+		mean = (0.5, 0.5, 0.5)
+		std = (0.5, 0.5, 0.5)
 
 	trnsfrms_val = transforms.Compose(
 					[
 					 transforms.ToTensor(),
-					 transforms.Normalize(mean = mean, std = std)
+					 transforms.Normalize(mean=mean, std=std)
 					]
 				)
 
@@ -76,7 +76,7 @@ class Whole_Slide_Bag_COMBINE(Dataset):
 		# loop all patch files,and combine the coords data
 		for svs_file in split_data:
 			single_name = svs_file.split(".")[0]
-			#lsil
+			# lsil
 			# if single_name == '62-CG23_14933_02':
 			# 	continue
 			# if single_name == '98-CG23_19585_02':
@@ -84,23 +84,24 @@ class Whole_Slide_Bag_COMBINE(Dataset):
 			# if single_name == '86-CG23_18818_01':
 			# 	continue
 			file_names.append(single_name)
-			patch_file = os.path.join(file_path,patch_path,single_name + ".h5")	
-			wsi_file = os.path.join(file_path,"data",svs_file)	
-			#lsil
+			patch_file = os.path.join(file_path, patch_path, single_name + ".h5")	
+			wsi_file = os.path.join(file_path, "data", svs_file)	
+			# lsil
 			# if os.path.basename(wsi_file) == '49.svs':
 			# 	continue
 			# if os.path.basename(wsi_file) == '4-CG23 10032 01.svs':
 			# 	continue
-			#hsil
+			# hsil
 			if os.path.basename(wsi_file) == '100-CG23_15432_02.svs':
 				continue
-			npy_file = single_name +  ".npy"
-			npy_file = os.path.join(mask_path,npy_file)	
+			npy_file = single_name + ".npy"
+			npy_file = os.path.join(mask_path, npy_file)	
 			wsi_data[single_name] = openslide.open_slide(wsi_file)
 			scale = wsi_data[single_name].level_downsamples[patch_level]
 			with h5py.File(patch_file, "r") as f:
 				print(os.path.basename(patch_file))
 				ignore_file = os.path.basename(patch_file)
+				# lsil
 				if ignore_file == '62-CG23_14933_02.h5':
 					continue
 				if ignore_file == '86-CG23_18818_01.h5':
@@ -114,14 +115,14 @@ class Whole_Slide_Bag_COMBINE(Dataset):
 				# sum data length
 				pathces_normal_len += len(f['coords'])
 				if target_patch_size > 0:
-					target_patch_size = (target_patch_size, ) * 2
+					target_patch_size = (target_patch_size,) * 2
 				elif custom_downsample > 1:
-					target_patch_size = (patch_size // custom_downsample, ) * 2
+					target_patch_size = (patch_size // custom_downsample,) * 2
 					
 				# Normal patch data
 				for coord in f['coords']:
-					patches_bag = {"name":single_name,"scale":scale,"type":"normal"}		
-					patches_bag["coord"] = np.array(coord) /scale
+					patches_bag = {"name":single_name, "scale":scale, "type":"normal"}		
+					patches_bag["coord"] = np.array(coord) / scale
 					patches_bag["coord"] = patches_bag["coord"].astype(np.int16)
 					patches_bag["patch_level"] = patch_level
 					patches_bag["label"] = 0
@@ -130,18 +131,23 @@ class Whole_Slide_Bag_COMBINE(Dataset):
 			# Annotation patch data
 			for label in get_tumor_label_cate():
 				patch_img_path = None
-				if work_type=="train":
+				# Data augmentation
+				if work_type == "train":
 					if label == 4 or label == 5:
-						patch_img_path = os.path.join(file_path,"tumor_patch_img",str(label),"output")
+						patch_img_path = os.path.join(file_path, "tumor_patch_img", str(label), "output")
 					elif label == 6:
-						patch_img_path = os.path.join(file_path,"tumor_patch_img",str(label),"origin")
+						patch_img_path = os.path.join(file_path, "tumor_patch_img", str(label), "origin")
+					elif label == 1 or label ==  2 or label ==  3:
+						patch_img_path = os.path.join(file_path, "tumor_patch_img", str(label), "origin")
+					
+					
 				else:
-					patch_img_path = os.path.join(file_path,"tumor_patch_img",str(label),"origin")
+					patch_img_path = os.path.join(file_path, "tumor_patch_img", str(label), "origin")
 				file_list = os.listdir(patch_img_path)
 				for file in file_list:
 					if not single_name in file:
 						continue
-					tumor_file_path = os.path.join(patch_img_path,file)
+					tumor_file_path = os.path.join(patch_img_path, file)
 					patches_tumor_patch_file_list.append(tumor_file_path)
 					pathces_tumor_len += 1
 				
@@ -157,13 +163,12 @@ class Whole_Slide_Bag_COMBINE(Dataset):
 	def __len__(self):
 		return self.pathces_total_len
 
-
 	def __getitem__(self, idx):
 		
 		# Judge type by index value
-		if idx>=self.pathces_normal_len:
+		if idx >= self.pathces_normal_len:
 			# print("mask_tumor_size is:{},coord:{}".format(mask_tumor_size,coord))
-			file_path = self.patches_tumor_patch_file_list[idx-self.pathces_normal_len]
+			file_path = self.patches_tumor_patch_file_list[idx - self.pathces_normal_len]
 			t = file_path.split("/")
 			try:
 				label = int(t[-3])
@@ -177,18 +182,16 @@ class Whole_Slide_Bag_COMBINE(Dataset):
 			name = item['name']
 			scale = item['scale']
 			coord = item['coord']
-			wsi_file = os.path.join(self.file_path,"data",name + ".svs")	
+			wsi_file = os.path.join(self.file_path, "data", name + ".svs")	
 			wsi = openslide.open_slide(wsi_file)			
 			# read image from wsi with coordination 
 			coord_ori = (coord * scale).astype(np.int16)			
 			img_ori = wsi.read_region(coord_ori, self.patch_level, (self.patch_size, self.patch_size)).convert('RGB')
 			img_ori = cv2.cvtColor(np.array(img_ori), cv2.COLOR_RGB2BGR)	
 			label = 0
-		if self.target_patch_size > 0 :
+		if self.target_patch_size > 0:
 			img_ori = img_ori.resize(self.target_patch_size)
 		img = self.roi_transforms(img_ori)
-		return img,label,img_ori,item
-
-
+		return img, label, img_ori, item
 		
 				

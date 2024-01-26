@@ -44,7 +44,7 @@ parser.add_argument('save_path', default=None, metavar='SAVE_PATH', type=str,
                     help='Path to the saved models')
 parser.add_argument('--num_workers', default=2, type=int, help='number of'
                     ' workers for each data loader, default 2.')
-parser.add_argument('--device_ids', default='0,1', type=str, help='comma'
+parser.add_argument('--device_ids', default='1', type=str, help='comma'
                     ' separated indices of GPU to use, e.g. 0,1 for using GPU_0'
                     ' and GPU_1, default 0.')
 
@@ -83,6 +83,7 @@ class CoolSystem(pl.LightningModule):
             
         ########## define the model ########## 
         model = chose_model(hparams.model)
+        model = model.to(device)
         fc_features = model.fc.in_features
         model.fc = nn.Linear(fc_features, len(get_label_cate()))        
         self.model = model.to(device)
@@ -114,6 +115,9 @@ class CoolSystem(pl.LightningModule):
         """training"""
         
         x, y,img_ori,_ = batch
+        x = x.to(device)
+        y = y.to(device)
+        self.model = self.model.to(device)
         output = self.model.forward(x)
         output = torch.squeeze(output,dim=-1) 
         loss = self.loss_fn(output, y)
@@ -150,6 +154,9 @@ class CoolSystem(pl.LightningModule):
     def validation_step(self, batch, batch_idx):
         # OPTIONAL
         x, y,img_ori,_ = batch
+        x = x.to(device)
+        y = y.to(device)
+        self.model = self.model.to(device)
         output = self.model.forward(x)
         output = torch.squeeze(output,dim=-1) 
         loss = self.loss_fn(output, y)
@@ -320,7 +327,7 @@ def main(hparams):
             callbacks=[checkpoint_callback],
             log_every_n_steps=1
         )       
-        trainer.fit(model,ckpt_path=checkpoint_path_file)   
+        trainer.fit(model.to(device),ckpt_path=checkpoint_path_file)   
     else:
         if os.path.exists(checkpoint_path):
             shutil.rmtree(checkpoint_path)
@@ -332,10 +339,12 @@ def main(hparams):
         os.makedirs(log_path, exist_ok=True)
         
         model = CoolSystem(hparams)
+        # model = model.to(device)
         # data_summarize(model.val_dataloader())
         trainer = pl.Trainer(
             max_epochs=hparams.epochs,
-            gpus=1,
+            gpus=[1],
+            devices=[1],
             accelerator='gpu',
             logger=model_logger,
             callbacks=[checkpoint_callback],

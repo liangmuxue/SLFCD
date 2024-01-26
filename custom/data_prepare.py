@@ -60,15 +60,19 @@ def build_data_csv(file_path,is_normal=False,split_rate=0.7):
             
             single_name = xml_file.split(".")[0]
             wsi_file = single_name + ".svs"
-            if wsi_file == '4-CG23 10032 01.svs':
-                continue
-            if wsi_file == '62-CG23_14933_02.svs':
-                continue
-            if wsi_file == '86-CG23_18818_01.svs':
-                continue
-            if wsi_file == '98-CG23_19585_02.svs':
-                continue
-            if wsi_file == '49.svs':
+            #lsil
+            # if wsi_file == '4-CG23 10032 01.svs':
+            #     continue
+            # if wsi_file == '62-CG23_14933_02.svs':
+            #     continue
+            # if wsi_file == '86-CG23_18818_01.svs':
+            #     continue
+            # if wsi_file == '98-CG23_19585_02.svs':
+            #     continue
+            # if wsi_file == '49.svs':
+            #     continue
+            #hsil
+            if wsi_file == '100-CG23_15432_02.svs':
                 continue
             if i < train_number:
                 list_train.append([wsi_file,1])
@@ -686,7 +690,7 @@ def combine_mul_dataset_csv(file_path,types):
     combine_test_sp.to_csv(test_file_path)
 if __name__ == '__main__':   
     # file_path = "/home/bavon/datasets/wsi/lsil"
-    file_path = "/home/bavon/datasets/wsi/hsil"
+    # file_path = "/home/bavon/datasets/wsi/hsil"
     # file_path = "/home/bavon/datasets/wsi/normal"
     
     # align_xml_svs(file_path)
@@ -694,7 +698,7 @@ if __name__ == '__main__':
     # build_data_csv(file_path,is_normal)
     # crop_with_annotation(file_path)
     #hsil
-    build_annotation_patches(file_path)
+    # build_annotation_patches(file_path)
     #lsil
     # build_annotation_patches_lsil(file_path,0.2,0.8,True)
     # aug_annotation_patches(file_path,'lsil',33)
@@ -703,5 +707,6 @@ if __name__ == '__main__':
     # is_normal = False
     # build_normal_patches_image(file_path,is_normal)
     # types = ["lsil","normal"]
-    # combine_mul_dataset_csv("/home/bavon/datasets/wsi",types)   
+    types = ["hsil","normal"]
+    combine_mul_dataset_csv("/home/bavon/datasets/wsi",types)   
     

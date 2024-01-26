@@ -171,7 +171,7 @@ if __name__ == '__main__':
 	else:
 		raise NotImplementedError
 	# feature_extractor = resnet50_baseline(pretrained=True)
-	checkpoint_path_file = "heatmaps/demo/ckpts/slfcd-17-0.02.ckpt"
+	checkpoint_path_file = "heatmaps/demo/ckpts/hsil/slfcd-19-0.02.ckpt"
 	a_model = CoolSystem.load_from_checkpoint(checkpoint_path_file).to(device)
 	# Remove Fc layer
 	a_model = torch.nn.Sequential(*(list(a_model.model.children())[:-1]))
@@ -297,7 +297,7 @@ if __name__ == '__main__':
 		##### check if h5_features_file exists ######
 		if not os.path.isfile(h5_path):
 			_, _, wsi_object = compute_from_patches(wsi_object=wsi_object,
-											model = model,
+											model=model,
 											feature_extractor=feature_extractor,
 											batch_size=exp_args.batch_size, **blocky_wsi_kwargs,
 											attn_save_path=None, feat_save_path=h5_path,

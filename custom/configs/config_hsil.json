@@ -18,6 +18,6 @@
   "log_every": 5,
   "num_workers": 5,
   "load_weight": false,
-  "model_name" : "resnet50_hsil_0109",
+  "model_name" : "resnet50_hsil_0118",
   "work_dir": "results"
 }

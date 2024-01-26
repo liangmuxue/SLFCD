@@ -13,11 +13,11 @@ exp_arguments:
   batch_size: 128
 data_arguments: 
   # where is data stored; can be a single str path or a dictionary of key, data_dir mapping
-  data_dir: heatmaps/demo/slides/
+  data_dir: heatmaps/demo/slides/hsil/
   # column name for key in data_dir (if a dict mapping is used)
   data_dir_key: source
   # csv list containing slide_ids (can additionally have seg/patch paramters, class labels, etc.)
-  process_list: heatmap_demo_dataset.csv
+  process_list: heatmap_demo_dataset_hsil.csv
   # preset file for segmentation/patching
   preset: presets/bwh_biopsy.csv
   # file extention for slides
@@ -26,9 +26,9 @@ data_arguments:
   label_dict:
     #LUAD: 0
     #LSCC: 1  
-    lsil: 0
-    normal: 1
-    hsil: 2                      
+    #lsil: 1
+    normal: 0
+    hsil: 1                      
 patching_arguments:
   # arguments for patching
   patch_size: 256
@@ -37,7 +37,7 @@ patching_arguments:
   custom_downsample: 1
 model_arguments: 
   # arguments for initializing model from checkpoint
-  ckpt_path: heatmaps/demo/ckpts/s_9_checkpoint.pt
+  ckpt_path: heatmaps/demo/ckpts/hsil/s_9_checkpoint.pt
   model_type: clam_sb # see utils/eval_utils/
   initiate_fn: initiate_model # see utils/eval_utils/
   model_size: small
