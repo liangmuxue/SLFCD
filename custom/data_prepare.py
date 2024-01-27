@@ -1,4 +1,5 @@
 import os
+import argparse
 from shutil import copyfile
 import pandas as pd
 import numpy as np
@@ -44,10 +45,12 @@ def build_data_csv(file_path,is_normal=False,split_rate=0.7):
     
     wsi_path = file_path + "/data"
     xml_path = file_path + "/xml"
+    list_file = os.path.join(file_path,"process_list_autogen.csv")
+    file_list = pd.read_csv(list_file)
     if not is_normal:
         total_file_number = len(os.listdir(xml_path))
     if is_normal:
-        total_file_number = len(os.listdir(wsi_path))
+        total_file_number = file_list.shape[0]
     
     train_number = int(total_file_number * split_rate)
     train_file_path = file_path + "/train.csv"
@@ -60,34 +63,16 @@ def build_data_csv(file_path,is_normal=False,split_rate=0.7):
             
             single_name = xml_file.split(".")[0]
             wsi_file = single_name + ".svs"
-            #lsil
-            # if wsi_file == '4-CG23 10032 01.svs':
-            #     continue
-            # if wsi_file == '62-CG23_14933_02.svs':
-            #     continue
-            # if wsi_file == '86-CG23_18818_01.svs':
-            #     continue
-            # if wsi_file == '98-CG23_19585_02.svs':
-            #     continue
-            # if wsi_file == '49.svs':
-            #     continue
-            #hsil
-            if wsi_file == '100-CG23_15432_02.svs':
-                continue
             if i < train_number:
                 list_train.append([wsi_file,1])
             else:
                 list_valid.append([wsi_file,1])
     
     if is_normal:
-        for i,wsi_files in enumerate(os.listdir(wsi_path)):
-            
+        file_names = file_list["slide_id"].values
+        for i,wsi_files in enumerate(file_names):
             single_name = wsi_files.split(".")[0]
             wsi_file = single_name + ".svs"
-            if wsi_file == '2-CG203_06358_02.svs':
-                continue
-            if wsi_file == '6-CG23_09942_02.svs':
-                continue
             if i < train_number:
                 list_train.append([wsi_file,1])
             else:
@@ -249,7 +234,10 @@ def patch_anno_img(xywh,patch_size=256,mask_threhold=0.9,mask_data=None,scale=4,
 
 
     def write_to_disk(patch_region,row=0,column=0):
-        tumor_patch_file_path = os.path.join(tumor_patch_path,"{}/origin/{}_{}{}.jpg".format(label,file_name,row,column))
+        path = os.path.join(tumor_patch_path,"{}/origin".format(label))
+        if not os.path.exists(path):
+            os.makedirs(path)
+        tumor_patch_file_path = os.path.join(path,"{}_{}{}.jpg".format(file_name,row,column))
         top_left = (int(patch_region[0]*scale),int(patch_region[2]*scale))
         img_data = wsi.read_region(top_left, level, (patch_size, patch_size)).convert('RGB')
         img_data = cv2.cvtColor(np.array(img_data), cv2.COLOR_RGB2BGR)    
@@ -397,9 +385,10 @@ def build_annotation_patches(file_path,level=1,patch_size=64):
     
     patch_path = file_path + "/patches_level{}".format(level)
     wsi_path = file_path + "/data"
-    for patch_file in os.listdir(patch_path):
-        file_name = patch_file.split(".")[0]
-        
+    xml_path = file_path + "/xml"
+    for xml_file in os.listdir(xml_path):
+        file_name = xml_file.split(".")[0]
+        patch_file = os.path.join(patch_path,"{}.h5".format(file_name))
         # if file_name!="9-CG23_10410_01":
         #     continue
         patch_file_path = os.path.join(patch_path,patch_file)
@@ -408,18 +397,7 @@ def build_annotation_patches(file_path,level=1,patch_size=64):
         scale = wsi.level_downsamples[level]
         mask_path = os.path.join(file_path,"tumor_mask_level{}".format(level))
         npy_file = os.path.join(mask_path,file_name+".npy") 
-        if os.path.basename(npy_file) == '10-CG23_12079_04.npy':
-            continue
-        if os.path.basename(npy_file) == '20-CG23_12199_01.npy':
-            continue
-        if os.path.basename(npy_file) == '48.npy':
-            continue
-        if os.path.basename(npy_file) == '51.npy':
-            continue
-        if os.path.basename(npy_file) == '56.npy':
-            continue
         mask_data = np.load(npy_file)
-                
         with h5py.File(patch_file_path, "a") as f:
             print("crop_region for:{}".format(patch_file_path))
             crop_region = f['crop_region'][:]
@@ -594,40 +572,29 @@ def label_patch_anno(coord,mask_data=None,scale=1,patch_size=64):
     most_frequent_value = unique_values[most_frequent_index]
     return most_frequent_value
 
-def build_normal_patches_image(file_path,is_normal,level=1,patch_size=64):
+def build_normal_patches_image(file_path,is_normal=False,level=1,patch_size=64):
     """Build images of normal region in wsi"""
     
     patch_path = file_path + "/patches_level{}".format(level)
     wsi_path = file_path + "/data"
-    for patch_file in os.listdir(patch_path):
-        file_name = patch_file.split(".")[0]
+    xml_path = file_path + "/xml"
+    for file in os.listdir(patch_path):
+        file_name = file.split(".")[0]
+        # if relation xml config file not exists, then ignore
+        if not is_normal and os.path.exists(os.path.join(xml_path,file_name + ".xml")):
+            continue
+        patch_file = file_name + ".h5"
         patch_file_path = os.path.join(patch_path,patch_file)
         wsi_file_path = os.path.join(wsi_path,file_name+".svs")
         wsi = openslide.open_slide(wsi_file_path)
         scale = wsi.level_downsamples[level]
         mask_path = os.path.join(file_path,"tumor_mask_level{}".format(level))
         npy_file = os.path.join(mask_path,file_name+".npy") 
-        #lsil
-        # if os.path.basename(npy_file) == '14-CG23_10773_01.npy':
-        #     continue
-        # if os.path.basename(npy_file) == '32.npy':
-        #     continue
-        #hsil
-        if os.path.basename(npy_file) == '10-CG23_12079_04.npy':
-            continue
-        if os.path.basename(npy_file) == '20-CG23_12199_01.npy':
-            continue
-        if os.path.basename(npy_file) == '48.npy':
-            continue
-        if os.path.basename(npy_file) == '51.npy':
-            continue
-        if os.path.basename(npy_file) == '56.npy':
-            continue
         if not is_normal:
             mask_data = np.load(npy_file)
         save_path = os.path.join(file_path,"tumor_patch_img/0",file_name)
         if not os.path.exists(save_path):
-            os.mkdir(save_path)
+            os.makedirs(save_path)
         print("process file:{}".format(patch_file_path))
         with h5py.File(patch_file_path, "a") as f:
             if not "coords" in f:
@@ -642,6 +609,7 @@ def build_normal_patches_image(file_path,is_normal,level=1,patch_size=64):
                 crop_img = np.array(wsi.read_region(coord, level, (patch_size,patch_size)).convert("RGB"))
                 crop_img = cv2.cvtColor(crop_img,cv2.COLOR_RGB2BGR) 
                 save_file_path = os.path.join(save_path,"{}.jpg".format(idx))
+                print("save_file_path",save_file_path)
                 cv2.imwrite(save_file_path,crop_img)
             print("write image ok:{}".format(file_name))
 
@@ -689,13 +657,21 @@ def combine_mul_dataset_csv(file_path,types):
     combine_valid_split.to_csv(valid_file_path)
     combine_test_sp.to_csv(test_file_path)
 if __name__ == '__main__':   
-    # file_path = "/home/bavon/datasets/wsi/lsil"
-    # file_path = "/home/bavon/datasets/wsi/hsil"
+    parser = argparse.ArgumentParser(description='Get tumor mask of tumor-WSI and '
+                                                 'save it in npy format')
+    parser.add_argument('--source', default=None, type=str,help='Path to the WSI file')
+    parser.add_argument('--is_normal',default=False, action='store_true')
+    parser.add_argument('--level', default=1, type=int, help='at which WSI level to obtain the mask, default 1')    
+    
+    args = parser.parse_args()
+    
+    file_path = args.source
+    is_normal = args.is_normal
     # file_path = "/home/bavon/datasets/wsi/normal"
     
     # align_xml_svs(file_path)
     # is_normal = False
-    # build_data_csv(file_path,is_normal)
+    # build_data_csv(file_path,is_normal=is_normal)
     # crop_with_annotation(file_path)
     #hsil
     # build_annotation_patches(file_path)
@@ -705,8 +681,8 @@ if __name__ == '__main__':
     # filter_patches_exclude_anno(file_path)
     
     # is_normal = False
-    # build_normal_patches_image(file_path,is_normal)
+    # build_normal_patches_image(file_path,is_normal=is_normal)
     # types = ["lsil","normal"]
     types = ["hsil","normal"]
-    combine_mul_dataset_csv("/home/bavon/datasets/wsi",types)   
+    combine_mul_dataset_csv(file_path,types)   
     

@@ -10,13 +10,17 @@ from camelyon16.data.annotation import UteFormatter
 parser = argparse.ArgumentParser(description='Convert Camelyon16 xml format to'
                                  'internal json format')
 
+parser.add_argument('--source', type=str,
+                    help='path to folder containing raw wsi image files')
 
 def run(args):
     
-    file_path = "/home/bavon/datasets/wsi/hsil"
+    file_path = args.source 
     # file_path = "/home/bavon/datasets/wsi/lsil"
     xml_path = os.path.join(file_path,"xml")
     json_path = os.path.join(file_path,"json")
+    if not os.path.exists(json_path):
+        os.mkdir(json_path)
     
     for file in os.listdir(xml_path):
         json_file = file.replace("xml", "json") 

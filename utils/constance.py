@@ -17,13 +17,19 @@ def get_label_with_group_code(group_code):
         if group_code==item["group_code"]:
             return item
         
-def get_label_cate():
-    cate = [0,1,2,3,4,5,6]
-    # cate = [0,1,2,3]
+def get_label_cate(mode=1):
+    if mode==0:
+        cate = [0,1,2,3,4,5,6]
+    else:
+        cate = [0,1,2,3]
     return cate        
 
-def get_tumor_label_cate():
-    return [1,2,3,4,5,6]
+def get_tumor_label_cate(mode=1):
+    if mode==0:
+        cate = [1,2,3,4,5,6]
+    else:
+        cate = [1,2,3]
+    return cate  
 
 
 def get_combine_label_with_type(type):

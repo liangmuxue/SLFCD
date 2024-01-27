@@ -89,6 +89,7 @@ def main(args):
 
 # Generic training settings
 parser = argparse.ArgumentParser(description='Configurations for WSI Training')
+parser.add_argument('--device', default="cuda:0", type=str)
 parser.add_argument('--data_dir', type=str, default=None, 
                     help='data directory')
 parser.add_argument('--max_epochs', type=int, default=200,
@@ -129,7 +130,8 @@ parser.add_argument('--bag_weight', type=float, default=0.7,
                     help='clam: weight coefficient for bag-level loss (default: 0.7)')
 parser.add_argument('--B', type=int, default=8, help='numbr of positive/negative patches to sample for clam')
 args = parser.parse_args()
-device=torch.device("cuda:1" if torch.cuda.is_available() else "cpu")
+
+device = args.device
 
 def seed_torch(seed=7):
     import random
@@ -137,7 +139,7 @@ def seed_torch(seed=7):
     os.environ['PYTHONHASHSEED'] = str(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)
-    if device.type == 'cuda:1':
+    if device.startswith('cuda'):
         torch.cuda.manual_seed(seed)
         torch.cuda.manual_seed_all(seed) # if you are using multi-GPU.
     torch.backends.cudnn.benchmark = False

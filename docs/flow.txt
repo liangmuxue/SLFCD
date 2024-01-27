@@ -1,4 +1,4 @@
-一  第一阶段准备
+一  第一阶段
 
 数据总目录：/home/bavon/datasets/wsi/hsil
 
@@ -7,7 +7,7 @@
 
 2 生成normal切片（默认level1）
   create_patches_fp.py
-  输入目录 data 输出目录 patches_level1
+  输入目录 data 输出目录 patches_level1 ,输出内容包括多个h5文件，以及process_list_autogen.csv
 
 3 xml标注文件转json 
   utexml2json2.py
@@ -29,11 +29,18 @@
 8 训练
   train_with_clamdata.py    
     
-二 第二阶段准备
+对于normal类型，适用 2,5,7
+    
+二 第二阶段
 
 1 生成patch特征值
   extract_features_fp.py
   参数 --data_dir /home/bavon/datasets/wsi --types 'hsil','lsil' --feat_dir /home/bavon/datasets/wsi/combine/features --batch_size 256 --slide_ext .svs
   输出目录 /home/bavon/datasets/wsi/combine/features
 
-2 生成训练和测试数据对照表 csv
+2 合并生成训练和测试数据对照表 csv
+  data_prepare.py 的 combine_mul_dataset_csv 方法
+  
+3 训练
+  clam/main.py
+  --drop_out  --lr 1e-4 --k 10 --label_frac 0.5 --exp_code task_1_tumor_vs_normal_CLAM_50 --weighted_sample --bag_loss ce --inst_loss svm --task task_1_tumor_vs_normal --model_type clam_sb --log_data --data_dir /home/bavon/datasets/wsi/combine --results_dir results/combine

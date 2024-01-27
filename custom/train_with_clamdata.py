@@ -31,25 +31,11 @@ import numpy as np
 from clam.datasets.dataset_h5 import Dataset_All_Bags
 from clam.datasets.dataset_combine import Whole_Slide_Bag_COMBINE
 from clam.utils.utils import print_network, collate_features
-
-sys.path.append(os.path.dirname(os.path.abspath(__file__)) + '/../../')
-
 from camelyon16.data.image_producer import ImageDataset
 from utils.constance import get_label_cate
 
-parser = argparse.ArgumentParser(description='Train model')
-parser.add_argument('cnn_path', default=None, metavar='CNN_PATH', type=str,
-                    help='Path to the config file in json format')
-parser.add_argument('save_path', default=None, metavar='SAVE_PATH', type=str,
-                    help='Path to the saved models')
-parser.add_argument('--num_workers', default=2, type=int, help='number of'
-                    ' workers for each data loader, default 2.')
-parser.add_argument('--device_ids', default='1', type=str, help='comma'
-                    ' separated indices of GPU to use, e.g. 0,1 for using GPU_0'
-                    ' and GPU_1, default 0.')
+sys.path.append(os.path.dirname(os.path.abspath(__file__)) + '/../../')
 
-device = 'cuda:1' # torch.device('cuda:0')
-os.environ["CUDA_VISIBLE_DEVICES"] = '1'
 # device = torch.device('cpu')
 
 from utils.vis import vis_data,visdom_data
@@ -71,12 +57,9 @@ def chose_model(model_name):
         raise Exception("I have not add any models. ")
     return model
 
-
-
 class CoolSystem(pl.LightningModule):
 
-
-    def __init__(self, hparams):
+    def __init__(self, hparams,device=None):
         super(CoolSystem, self).__init__()
 
         self.params = hparams
@@ -297,7 +280,8 @@ def get_last_ck_file(checkpoint_path):
     list.sort(key=lambda fn: os.path.getmtime(checkpoint_path+"/"+fn) if not os.path.isdir(checkpoint_path+"/"+fn) else 0)    
     return list[-1]
 
-def main(hparams):
+def main(hparams,device_ids=None):
+    device = torch.device('cuda:{}'.format(device_ids))  
     checkpoint_path = os.path.join(hparams.work_dir,"checkpoints",hparams.model_name)
     filename = 'slfcd-{epoch:02d}-{val_loss:.2f}'
     
@@ -321,7 +305,7 @@ def main(hparams):
         # trainer = Trainer(resume_from_checkpoint=checkpoint_path_file)
         trainer = pl.Trainer(
             max_epochs=hparams.epochs,
-            gpus=1,
+            gpus=[int(device_ids)],
             accelerator='gpu',
             logger=model_logger,
             callbacks=[checkpoint_callback],
@@ -338,13 +322,12 @@ def main(hparams):
         # os.mkdir(log_path)
         os.makedirs(log_path, exist_ok=True)
         
-        model = CoolSystem(hparams)
+        model = CoolSystem(hparams,device=device)
         # model = model.to(device)
         # data_summarize(model.val_dataloader())
         trainer = pl.Trainer(
             max_epochs=hparams.epochs,
-            gpus=[1],
-            devices=[1],
+            gpus=[int(device_ids)],
             accelerator='gpu',
             logger=model_logger,
             callbacks=[checkpoint_callback],
@@ -379,11 +362,16 @@ def data_summarize(dataloader):
     print("label_stat 1:{},2:{},3:{}".format(np.sum(label_stat==1),np.sum(label_stat==2),np.sum(label_stat==3)))
 
 if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description='Train model')
+    parser.add_argument('--device_ids', default='0', type=str, help='choose device')
+    args = parser.parse_args()
+    device_ids = args.device_ids
+      
     # cnn_path = 'custom/configs/config_lsil.json'
     cnn_path = 'custom/configs/config_hsil.json'
     with open(cnn_path, 'r') as f:
         args = json.load(f) 
     hyperparams = Namespace(**args)    
-    main(hyperparams)
+    main(hyperparams,device_ids=device_ids)
     
     

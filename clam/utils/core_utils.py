@@ -1,8 +1,8 @@
 import numpy as np
 import torch
-from utils.utils import *
+from clam.utils.utils import calculate_error,print_network,get_optim,get_split_loader
 import os
-from datasets.dataset_generic import save_splits
+from clam.datasets.dataset_generic import save_splits
 from models.model_mil import MIL_fc, MIL_fc_mc
 from models.model_clam import CLAM_MB, CLAM_SB
 from sklearn.preprocessing import label_binarize
@@ -92,6 +92,7 @@ def train(datasets, cur, args):
         train for a single fold
     """
     print('\nTraining Fold {}!'.format(cur))
+    device = args.device
     writer_dir = os.path.join(args.results_dir, str(cur))
     if not os.path.isdir(writer_dir):
         os.mkdir(writer_dir)
@@ -115,10 +116,10 @@ def train(datasets, cur, args):
     if args.bag_loss == 'svm':
         from topk.svm import SmoothTop1SVM
         loss_fn = SmoothTop1SVM(n_classes = args.n_classes)
-        if device.type == 'cuda':
+        if device.startswith('cuda'):
             loss_fn = loss_fn.cuda()
     else:
-        loss_fn = nn.CrossEntropyLoss()
+        loss_fn = torch.nn.CrossEntropyLoss()
     print('Done!')
     
     print('\nInit Model...', end=' ')
@@ -140,7 +141,7 @@ def train(datasets, cur, args):
             if device.type == 'cuda':
                 instance_loss_fn = instance_loss_fn.cuda()
         else:
-            instance_loss_fn = nn.CrossEntropyLoss()
+            instance_loss_fn = torch.nn.CrossEntropyLoss()
         
         if args.model_type =='clam_sb':
             model = CLAM_SB(**model_dict, instance_loss_fn=instance_loss_fn)
@@ -233,12 +234,6 @@ def train_loop_clam(epoch, model, loader, optimizer, n_classes, bag_weight, writ
     label_0 = 0
     label_1 = 0
     for batch_idx, (data, label) in enumerate(loader):
-        if label == 1:
-            label_1 += 1
-            print("label_1",label_1)
-        if label == 0:
-            label_0 += 1
-            print("label_0",label_0)
         data, label = data.to(device), label.to(device)
         logits, Y_prob, Y_hat, _, instance_dict = model(data, label=label, instance_eval=True)
 

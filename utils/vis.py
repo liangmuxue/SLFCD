@@ -15,8 +15,6 @@ PURPLE = (255, 0, 255)
 WHITE = (255, 255, 255)
 BLACK = (0, 0, 0)
 
-DEFAULT_FONT = cv2.FONT_HERSHEY_SIMPLEX
-
 def find_color_scalar(color_string):
     color_dict = {
         'darkslategray': (79, 47, 79),

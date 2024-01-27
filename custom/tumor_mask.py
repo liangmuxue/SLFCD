@@ -14,14 +14,9 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)) + '/../../')
 
 parser = argparse.ArgumentParser(description='Get tumor mask of tumor-WSI and '
                                              'save it in npy format')
-parser.add_argument('wsi_path', default=None, metavar='WSI_PATH', type=str,
-                    help='Path to the WSI file')
-parser.add_argument('json_path', default=None, metavar='JSON_PATH', type=str,
-                    help='Path to the JSON file')
-parser.add_argument('npy_path', default=None, metavar='NPY_PATH', type=str,
-                    help='Path to the output npy mask file')
-parser.add_argument('--level', default=6, type=int, help='at which WSI level'
-                    ' to obtain the mask, default 6')
+parser.add_argument('--wsi_path', default=None, type=str,help='Path to the WSI file')
+parser.add_argument('--level', default=1, type=int, help='at which WSI level'
+                    ' to obtain the mask, default 1')
 
 
 def run(wsi_path,npy_path,json_path,level=0):
@@ -31,7 +26,6 @@ def run(wsi_path,npy_path,json_path,level=0):
         single_name = json_file.split(".")[0]
         npy_file = os.path.join(npy_path,single_name+".npy")
         wsi_file_path = os.path.join(wsi_path,single_name+".svs")
-        print("file fail",wsi_file_path)
         #lsil
         # if os.path.basename(wsi_file_path) == '49.svs':
         #     continue
@@ -76,15 +70,20 @@ def run(wsi_path,npy_path,json_path,level=0):
         np.save(npy_file, mask_tumor)
         print("process {} ok".format(json_file))
 
-def main():
+def main(args):
     logging.basicConfig(level=logging.INFO)
     # file_path = "/home/bavon/datasets/wsi/lsil"
     file_path = "/home/bavon/datasets/wsi/hsil"
+    file_path = args.wsi_path
+    level = args.level
     # file_path = "/home/bavon/datasets/wsi/normal"
     wsi_path = "{}/data".format(file_path)  
-    npy_path = "{}/tumor_mask_level1".format(file_path)   
+    npy_path = "{}/tumor_mask_level{}".format(file_path,level)  
+    if not os.path.exists(npy_path):
+        os.mkdir(npy_path)
     json_path = "{}/json".format(file_path)  
     run(wsi_path,npy_path,json_path,level=1)
 
 if __name__ == "__main__":
-    main()
+    args = parser.parse_args()
+    main(args)

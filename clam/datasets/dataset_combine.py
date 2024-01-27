@@ -16,7 +16,7 @@ import torch.nn.functional as F
 from PIL import Image
 import h5py
 from random import randrange
-from utils.constance import get_tumor_label_cate
+from utils.constance import get_label_cate,get_tumor_label_cate
 
 
 def eval_transforms(pretrained=False):
@@ -99,7 +99,6 @@ class Whole_Slide_Bag_COMBINE(Dataset):
 			wsi_data[single_name] = openslide.open_slide(wsi_file)
 			scale = wsi_data[single_name].level_downsamples[patch_level]
 			with h5py.File(patch_file, "r") as f:
-				print(os.path.basename(patch_file))
 				ignore_file = os.path.basename(patch_file)
 				# lsil
 				if ignore_file == '62-CG23_14933_02.h5':
