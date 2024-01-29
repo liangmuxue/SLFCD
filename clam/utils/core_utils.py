@@ -3,8 +3,8 @@ import torch
 from clam.utils.utils import calculate_error,print_network,get_optim,get_split_loader
 import os
 from clam.datasets.dataset_generic import save_splits
-from models.model_mil import MIL_fc, MIL_fc_mc
-from models.model_clam import CLAM_MB, CLAM_SB
+from clam.models.model_mil import MIL_fc, MIL_fc_mc
+from clam.models.model_clam import CLAM_MB, CLAM_SB
 from sklearn.preprocessing import label_binarize
 from sklearn.metrics import roc_auc_score, roc_curve
 from sklearn.metrics import auc as calc_auc
@@ -138,7 +138,7 @@ def train(datasets, cur, args):
         if args.inst_loss == 'svm':
             from topk.svm import SmoothTop1SVM
             instance_loss_fn = SmoothTop1SVM(n_classes = 2)
-            if device.type == 'cuda':
+            if device.startswith('cuda'):
                 instance_loss_fn = instance_loss_fn.cuda()
         else:
             instance_loss_fn = torch.nn.CrossEntropyLoss()
@@ -275,12 +275,12 @@ def train_loop_clam(epoch, model, loader, optimizer, n_classes, bag_weight, writ
         print('\n')
         for i in range(2):
             acc, correct, count = inst_logger.get_summary(i)
-            print('class {} clustering acc {}: correct {}/{}'.format(i, acc, correct, count))
+            print('[Training] class {} clustering acc {}: correct {}/{}'.format(i, acc, correct, count))
 
     print('Epoch: {}, train_loss: {:.4f}, train_clustering_loss:  {:.4f}, train_error: {:.4f}'.format(epoch, train_loss, train_inst_loss,  train_error))
     for i in range(n_classes):
         acc, correct, count = acc_logger.get_summary(i)
-        print('class {}: acc {}, correct {}/{}'.format(i, acc, correct, count))
+        print('[Training] class {}: acc {}, correct {}/{}'.format(i, acc, correct, count))
         if writer and acc is not None:
             writer.add_scalar('train/class_{}_acc'.format(i), acc, epoch)
 
@@ -382,7 +382,7 @@ def validate(cur, epoch, model, loader, n_classes, early_stopping = None, writer
     print('\nVal Set, val_loss: {:.4f}, val_error: {:.4f}, auc: {:.4f}'.format(val_loss, val_error, auc))
     for i in range(n_classes):
         acc, correct, count = acc_logger.get_summary(i)
-        print('class {}: acc {}, correct {}/{}'.format(i, acc, correct, count))     
+        print('[Valid] class {}: acc {}, correct {}/{}'.format(i, acc, correct, count))     
 
     if early_stopping:
         assert results_dir
@@ -458,7 +458,7 @@ def validate_clam(cur, epoch, model, loader, n_classes, early_stopping = None, w
         val_inst_loss /= inst_count
         for i in range(2):
             acc, correct, count = inst_logger.get_summary(i)
-            print('class {} clustering acc {}: correct {}/{}'.format(i, acc, correct, count))
+            print('[Valid] class {} clustering acc {}: correct {}/{}'.format(i, acc, correct, count))
     
     if writer:
         writer.add_scalar('val/loss', val_loss, epoch)
@@ -469,7 +469,7 @@ def validate_clam(cur, epoch, model, loader, n_classes, early_stopping = None, w
 
     for i in range(n_classes):
         acc, correct, count = acc_logger.get_summary(i)
-        print('class {}: acc {}, correct {}/{}'.format(i, acc, correct, count))
+        print('[Valid] class {}: acc {}, correct {}/{}'.format(i, acc, correct, count))
         
         if writer and acc is not None:
             writer.add_scalar('val/class_{}_acc'.format(i), acc, epoch)

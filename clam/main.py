@@ -90,6 +90,7 @@ def main(args):
 # Generic training settings
 parser = argparse.ArgumentParser(description='Configurations for WSI Training')
 parser.add_argument('--device', default="cuda:0", type=str)
+parser.add_argument('--load_weights', action='store_true', default=False, help='Load pretrained weights to model')
 parser.add_argument('--data_dir', type=str, default=None, 
                     help='data directory')
 parser.add_argument('--max_epochs', type=int, default=200,
@@ -171,28 +172,27 @@ if args.model_type in ['clam_sb', 'clam_mb']:
                     'inst_loss': args.inst_loss,
                     'B': args.B})
 
-args.n_classes=2
-
-print('\nLoad Dataset')
-
-
-if not os.path.isdir(args.results_dir):
-    os.mkdir(args.results_dir)
-
-args.results_dir = os.path.join(args.results_dir, str(args.exp_code) + '_s{}'.format(args.seed))
-if not os.path.isdir(args.results_dir):
-    os.mkdir(args.results_dir)
-
-
-with open(args.results_dir + '/experiment_{}.txt'.format(args.exp_code), 'w') as f:
-    print(settings, file=f)
-f.close()
 
 print("################# Settings ###################")
 for key, val in settings.items():
     print("{}:  {}".format(key, val))        
 
 if __name__ == "__main__":
+    args.n_classes=2
+    print('\nLoad Dataset')
+    
+    if not os.path.isdir(args.results_dir):
+        os.mkdir(args.results_dir)
+    
+    args.results_dir = os.path.join(args.results_dir, str(args.exp_code) + '_s{}'.format(args.seed))
+    if not os.path.isdir(args.results_dir):
+        os.mkdir(args.results_dir)
+    
+    with open(args.results_dir + '/experiment_{}.txt'.format(args.exp_code), 'w') as f:
+        print(settings, file=f)
+    f.close()    
+    
+    
     results = main(args)
     print("finished!")
     print("end script")

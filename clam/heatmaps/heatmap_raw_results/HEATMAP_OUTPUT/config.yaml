@@ -30,7 +30,7 @@ heatmap_arguments:
   use_roi: false
   vis_level: 1
 model_arguments:
-  ckpt_path: heatmaps/demo/ckpts/s_9_checkpoint.pt
+  ckpt_path: results/combine/bag_model_s1/s_9_checkpoint.pt
   drop_out: true
   initiate_fn: initiate_model
   model_size: small

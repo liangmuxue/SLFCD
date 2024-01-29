@@ -12,7 +12,7 @@ import pandas as pd
 from clam.utils.utils import *
 from math import floor
 from clam.utils.eval_utils import initiate_model as initiate_model
-from models.model_clam import CLAM_MB, CLAM_SB
+from clam.models.model_clam import CLAM_MB, CLAM_SB
 from clam.models.resnet_custom import resnet50_baseline
 from types import SimpleNamespace
 from collections import namedtuple
@@ -31,8 +31,9 @@ parser.add_argument('--save_exp_code', type=str, default=None,
 					help='experiment code')
 parser.add_argument('--overlap', type=float, default=None)
 parser.add_argument('--config_file', type=str, default="config_template.yaml")
+parser.add_argument('--device', type=str, default="cuda:0")
 args = parser.parse_args()
-
+device = args.device
 
 def infer_single_slide(model, features, label, reverse_label_dict, k=1):
 	features = features.to(device)
@@ -86,7 +87,7 @@ def parse_config_dict(args, config_dict):
 
 
 if __name__ == '__main__':
-	config_path = os.path.join('heatmaps/configs', args.config_file)
+	config_path = os.path.join('clam/heatmaps/configs', args.config_file)
 	config_dict = yaml.safe_load(open(config_path, 'r'))
 	config_dict = parse_config_dict(args, config_dict)
 
@@ -97,14 +98,7 @@ if __name__ == '__main__':
 				print (value_key + " : " + str(value_value))
 		else:
 			print ('\n' + key + " : " + str(value))
-			
-	decision = input('Continue? Y/N ')
-	if decision in ['Y', 'y', 'Yes', 'yes']:
-		pass
-	elif decision in ['N', 'n', 'No', 'NO']:
-		exit()
-	else:
-		raise NotImplementedError
+
 
 	args = config_dict
 	patch_args = argparse.Namespace(**args['patching_arguments'])
@@ -152,7 +146,7 @@ if __name__ == '__main__':
 		df = initialize_df(slides, def_seg_params, def_filter_params, def_vis_params, def_patch_params, use_heatmap_args=False)
 		
 	else:
-		df = pd.read_csv(os.path.join('heatmaps/process_lists', data_args.process_list))
+		df = pd.read_csv(os.path.join(data_args.data_dir, data_args.process_list))
 		df = initialize_df(df, def_seg_params, def_filter_params, def_vis_params, def_patch_params, use_heatmap_args=False)
 
 	mask = df['process'] == 1
@@ -162,24 +156,22 @@ if __name__ == '__main__':
 	print(process_stack.head(len(process_stack)))
 
 	print('\ninitializing model from checkpoint')
+	# Weights for second stage
 	ckpt_path = model_args.ckpt_path
 	print('\nckpt path: {}'.format(ckpt_path))
 	
 	if model_args.initiate_fn == 'initiate_model':
 		model = initiate_model(model_args, ckpt_path)
-		model = model.to("cuda:1")
+		model = model.to(device)
 	else:
 		raise NotImplementedError
-	# feature_extractor = resnet50_baseline(pretrained=True)
-	checkpoint_path_file = "heatmaps/demo/ckpts/hsil/slfcd-19-0.02.ckpt"
-	a_model = CoolSystem.load_from_checkpoint(checkpoint_path_file).to(device)
+	
+	# Weights for first stage
+	a_model = CoolSystem.load_from_checkpoint(model_args.slf_ckpt_path).to(device)
 	# Remove Fc layer
 	a_model = torch.nn.Sequential(*(list(a_model.model.children())[:-1]))
 	feature_extractor = a_model
 	feature_extractor.eval()
-	# device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-	device = torch.device("cuda:1" if torch.cuda.is_available() else "cpu")
-	print('Done!')
 
 	label_dict = data_args.label_dict
 	class_labels = list(label_dict.keys())
@@ -187,7 +179,7 @@ if __name__ == '__main__':
 	reverse_label_dict = {class_encodings[i]: class_labels[i] for i in range(len(class_labels))} 
  # if torch.cuda.device_count() > 1:
  # 	device_ids = list(range(torch.cuda.device_count()))
- # 	feature_extractor = nn.DataParallel(feature_extractor, device_ids=device_ids).to('cuda:1')
+ # 	feature_extractor = nn.DataParallel(feature_extractor, device_ids=device_ids).to('device')
  # else:
  # 	feature_extractor = feature_extractor.to(device)
 	if torch.cuda.device_count() > 1:
