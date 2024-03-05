@@ -146,7 +146,7 @@ if __name__ == '__main__':
 		df = initialize_df(slides, def_seg_params, def_filter_params, def_vis_params, def_patch_params, use_heatmap_args=False)
 		
 	else:
-		df = pd.read_csv(os.path.join(data_args.data_dir, data_args.process_list))
+		df = pd.read_csv(os.path.join(data_args.process_list))
 		df = initialize_df(df, def_seg_params, def_filter_params, def_vis_params, def_patch_params, use_heatmap_args=False)
 
 	mask = df['process'] == 1
@@ -167,23 +167,16 @@ if __name__ == '__main__':
 		raise NotImplementedError
 	
 	# Weights for first stage
-	a_model = CoolSystem.load_from_checkpoint(model_args.slf_ckpt_path).to(device)
+	feature_extractor = CoolSystem.load_from_checkpoint(model_args.slf_ckpt_path).to(device)
 	# Remove Fc layer
-	a_model = torch.nn.Sequential(*(list(a_model.model.children())[:-1]))
-	feature_extractor = a_model
+	feature_extractor = torch.nn.Sequential(*(list(feature_extractor.model.children())[:-1]))
 	feature_extractor.eval()
 
 	label_dict = data_args.label_dict
 	class_labels = list(label_dict.keys())
 	class_encodings = list(label_dict.values())
 	reverse_label_dict = {class_encodings[i]: class_labels[i] for i in range(len(class_labels))} 
- # if torch.cuda.device_count() > 1:
- # 	device_ids = list(range(torch.cuda.device_count()))
- # 	feature_extractor = nn.DataParallel(feature_extractor, device_ids=device_ids).to('device')
- # else:
- # 	feature_extractor = feature_extractor.to(device)
-	if torch.cuda.device_count() > 1:
-		feature_extractor = feature_extractor.to(device)
+	feature_extractor = feature_extractor.to(device)
 
 	os.makedirs(exp_args.production_save_dir, exist_ok=True)
 	os.makedirs(exp_args.raw_save_dir, exist_ok=True)
@@ -293,6 +286,7 @@ if __name__ == '__main__':
 											feature_extractor=feature_extractor,
 											batch_size=exp_args.batch_size, **blocky_wsi_kwargs,
 											attn_save_path=None, feat_save_path=h5_path,
+											device=device,
 											ref_scores=None)				
 		
 		##### check if pt_features_file exists ######
@@ -323,11 +317,10 @@ if __name__ == '__main__':
 			process_stack.loc[i, 'Pred_{}'.format(c)] = Y_hats_str[c]
 			process_stack.loc[i, 'p_{}'.format(c)] = Y_probs[c]
 
-		os.makedirs('heatmaps/results/', exist_ok=True)
 		if data_args.process_list is not None:
-			process_stack.to_csv('heatmaps/results/{}.csv'.format(data_args.process_list.replace('.csv', '')), index=False)
+			process_stack.to_csv(data_args.process_list, index=False)
 		else:
-			process_stack.to_csv('heatmaps/results/{}.csv'.format(exp_args.save_exp_code), index=False)
+			process_stack.to_csv('clam/heatmaps/results/{}.csv'.format(exp_args.save_exp_code), index=False)
 		
 		file = h5py.File(block_map_save_path, 'r')
 		dset = file['attention_scores']
@@ -371,8 +364,9 @@ if __name__ == '__main__':
 			ref_scores = None
 		
 		if heatmap_args.calc_heatmap:
-			compute_from_patches(wsi_object=wsi_object, clam_pred=Y_hats[0], model=model, feature_extractor=feature_extractor, batch_size=exp_args.batch_size, **wsi_kwargs,
-								attn_save_path=save_path, ref_scores=ref_scores)
+			compute_from_patches(wsi_object=wsi_object, clam_pred=Y_hats[0], model=model, feature_extractor=feature_extractor, 
+								batch_size=exp_args.batch_size, **wsi_kwargs,
+								attn_save_path=save_path, ref_scores=ref_scores,device=device)
 
 		if not os.path.isfile(save_path):
 			print('heatmap {} not found'.format(save_path))

@@ -5,11 +5,11 @@ import torch.nn.functional as F
 import pdb
 import os
 import pandas as pd
-from utils.utils import *
+from clam.utils.utils import get_simple_loader,print_network,get_optim,get_split_loader
 from PIL import Image
 from math import floor
 import matplotlib.pyplot as plt
-from datasets.wsi_dataset import Wsi_Region
+from clam.datasets.wsi_dataset import Wsi_Region
 import h5py
 from wsi_core.WholeSlideImage import WholeSlideImage
 from scipy.stats import percentileofscore
@@ -17,7 +17,6 @@ import math
 from utils.file_utils import save_hdf5
 from scipy.stats import percentileofscore
 
-device=torch.device("cuda:1" if torch.cuda.is_available() else "cpu")
 
 def score2percentile(score, ref):
     percentile = percentileofscore(ref.flatten(), score)
@@ -46,7 +45,7 @@ def initialize_wsi(wsi_path, seg_mask_path=None, seg_params=None, filter_params=
     return wsi_object
 
 def compute_from_patches(wsi_object, clam_pred=None, model=None, feature_extractor=None, batch_size=512,  
-    attn_save_path=None, ref_scores=None, feat_save_path=None, **wsi_kwargs):    
+    attn_save_path=None, ref_scores=None, feat_save_path=None,device=None, **wsi_kwargs):    
     top_left = wsi_kwargs['top_left']
     bot_right = wsi_kwargs['bot_right']
     patch_size = wsi_kwargs['patch_size']

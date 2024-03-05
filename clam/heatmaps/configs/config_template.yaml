@@ -13,11 +13,11 @@ exp_arguments:
   batch_size: 128
 data_arguments: 
   # where is data stored; can be a single str path or a dictionary of key, data_dir mapping
-  data_dir: clam/heatmaps/demo/slides/hsil/
+  data_dir: /home/liang/dataset/wsi/combine/tests/hsil
   # column name for key in data_dir (if a dict mapping is used)
   data_dir_key: source
   # csv list containing slide_ids (can additionally have seg/patch paramters, class labels, etc.)
-  process_list: heatmap_demo_dataset_hsil.csv
+  process_list: clam/heatmaps/configs/heatmap_demo_dataset_hsil.csv
   # preset file for segmentation/patching
   preset: clam/presets/bwh_biopsy.csv
   # file extention for slides
@@ -38,7 +38,7 @@ patching_arguments:
 model_arguments: 
   # arguments for initializing model from checkpoint
   slf_ckpt_path: results/checkpoints/resnet50_hsil/slfcd-19-0.01.ckpt
-  ckpt_path: results/combine/bag_model_s1/s_9_checkpoint.pt
+  ckpt_path: results/combine/bag_sb_model_s1/s_9_checkpoint.pt
   model_type: clam_sb # see utils/eval_utils/
   initiate_fn: initiate_model # see utils/eval_utils/
   model_size: small

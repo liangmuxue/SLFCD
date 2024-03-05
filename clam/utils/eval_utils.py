@@ -1,18 +1,14 @@
 import numpy as np
 
 import torch
-import torch.nn as nn
-import torch.nn.functional as F
-from models.model_mil import MIL_fc, MIL_fc_mc
-from models.model_clam import CLAM_SB, CLAM_MB
-import pdb
+from clam.models.model_mil import MIL_fc, MIL_fc_mc
+from clam.models.model_clam import CLAM_SB, CLAM_MB
 import os
 import pandas as pd
-from utils.utils import *
-from utils.core_utils import Accuracy_Logger
+from clam.utils.utils import calculate_error,print_network,get_optim,get_simple_loader
+from clam.utils.core_utils import Accuracy_Logger
 from sklearn.metrics import roc_auc_score, roc_curve, auc
 from sklearn.preprocessing import label_binarize
-import matplotlib.pyplot as plt
 
 
 def initiate_model(args, ckpt_path):
@@ -58,7 +54,7 @@ def eval(dataset, args, ckpt_path):
     return model, patient_results, test_error, auc, df
 
 
-def summary(model, loader, args):
+def summary(model, loader, args,device=None):
     acc_logger = Accuracy_Logger(n_classes=args.n_classes)
     model.eval()
     test_loss = 0.
