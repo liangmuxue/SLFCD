@@ -19,7 +19,7 @@ torch.manual_seed(0)
 torch.cuda.manual_seed_all(0)
 
 from camelyon16.data.wsi_producer import WSIPatchDataset  # noqa
-
+from custom.train_with_clamdata import CoolSystem
 
 parser = argparse.ArgumentParser(description='Get the probability map of tumor'
                                  ' patch predictions given a WSI')
@@ -46,6 +46,8 @@ parser.add_argument('--eight_avg', default=0, type=int, help='if using average'
 def chose_model(mod):
     if mod == 'resnet18':
         model = models.resnet18(pretrained=False)
+    elif mod == 'resnet50':
+        model = models.resnet50(pretrained=False)        
     else:
         raise Exception("I have not add any models. ")
     return model
@@ -58,26 +60,27 @@ def get_probs_map(model, dataloader):
     count = 0
     time_now = time.time()
     for (data, x_mask, y_mask) in dataloader:
-        data = Variable(data.cuda(async=True), volatile=True)
-        output = model(data)
-        # because of torch.squeeze at the end of forward in resnet.py, if the
-        # len of dim_0 (batch_size) of data is 1, then output removes this dim.
-        # should be fixed in resnet.py by specifying torch.squeeze(dim=2) later
-        if len(output.shape) == 1:
-            probs = output.sigmoid().cpu().data.numpy().flatten()
-        else:
-            probs = output[:,
-                           :].sigmoid().cpu().data.numpy().flatten()
-        probs_map[x_mask, y_mask] = probs
-        count += 1
-
-        time_spent = time.time() - time_now
-        time_now = time.time()
-        logging.info(
-            '{}, flip : {}, rotate : {}, batch : {}/{}, Run Time : {:.2f}'
-            .format(
-                time.strftime("%Y-%m-%d %H:%M:%S"), dataloader.dataset._flip,
-                dataloader.dataset._rotate, count, num_batch, time_spent))
+        with torch.no_grad():
+            data = Variable(data.cuda())
+            output = model(data)
+            # because of torch.squeeze at the end of forward in resnet.py, if the
+            # len of dim_0 (batch_size) of data is 1, then output removes this dim.
+            # should be fixed in resnet.py by specifying torch.squeeze(dim=2) later
+            if len(output.shape) == 1:
+                probs = output.cpu().data.numpy()
+            else:
+                probs = output.cpu().data.numpy()
+                probs = np.argmax(probs,1)
+            probs_map[x_mask, y_mask] = probs
+            count += 1
+    
+            time_spent = time.time() - time_now
+            time_now = time.time()
+            logging.info(
+                '{}, flip : {}, rotate : {}, batch : {}/{}, Run Time : {:.2f}'
+                .format(
+                    time.strftime("%Y-%m-%d %H:%M:%S"), dataloader.dataset._flip,
+                    dataloader.dataset._rotate, count, num_batch, time_spent))
 
     return probs_map
 
@@ -104,12 +107,9 @@ def run(args):
         cnn = json.load(f)
 
     mask = np.load(args.mask_path)
-    ckpt = torch.load(args.ckpt_path)
-    model = chose_model(cnn['model'])
-    fc_features = model.fc.in_features
-    model.fc = nn.Linear(fc_features, 1)
-    model.load_state_dict(ckpt['state_dict'])
-    model = model.cuda().eval()
+    # model = torch.load(checkpoint_path_file) # 
+    device = "cuda:0"
+    model = CoolSystem.load_from_checkpoint(args.ckpt_path).to(device)
 
     if not args.eight_avg:
         dataloader = make_dataloader(

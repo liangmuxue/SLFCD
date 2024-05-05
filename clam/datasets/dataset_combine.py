@@ -86,27 +86,13 @@ class Whole_Slide_Bag_COMBINE(Dataset):
 			file_names.append(single_name)
 			patch_file = os.path.join(file_path, patch_path, single_name + ".h5")	
 			wsi_file = os.path.join(file_path, "data", svs_file)	
-			# lsil
-			# if os.path.basename(wsi_file) == '49.svs':
-			# 	continue
-			# if os.path.basename(wsi_file) == '4-CG23 10032 01.svs':
-			# 	continue
-			# hsil
-			if os.path.basename(wsi_file) == '100-CG23_15432_02.svs':
-				continue
 			npy_file = single_name + ".npy"
 			npy_file = os.path.join(mask_path, npy_file)	
+			mask_data = np.load(npy_file)
 			wsi_data[single_name] = openslide.open_slide(wsi_file)
 			scale = wsi_data[single_name].level_downsamples[patch_level]
 			with h5py.File(patch_file, "r") as f:
 				ignore_file = os.path.basename(patch_file)
-				# lsil
-				if ignore_file == '62-CG23_14933_02.h5':
-					continue
-				if ignore_file == '86-CG23_18818_01.h5':
-					continue
-				if ignore_file == '98-CG23_19585_02.h5':
-					continue
 				self.patch_coords = np.array(f['coords'])
 				patch_level = f['coords'].attrs['patch_level']
 				patch_size = f['coords'].attrs['patch_size']
@@ -117,14 +103,25 @@ class Whole_Slide_Bag_COMBINE(Dataset):
 					target_patch_size = (target_patch_size,) * 2
 				elif custom_downsample > 1:
 					target_patch_size = (patch_size // custom_downsample,) * 2
-					
+							
 				# Normal patch data
 				for coord in f['coords']:
-					patches_bag = {"name":single_name, "scale":scale, "type":"normal"}		
+					patches_bag = {"name":single_name, "scale":scale}
+					
+					# 通过标注掩码信息，判断所属区域类型 
+					coord_x = int(coord[0]/scale)
+					coord_y = int(coord[1]/scale)
+					mask_data_item = mask_data[coord_y:coord_y+patch_size,coord_x:coord_x+patch_size]	
+					# 超出标注数量阈值，则视为标注类别
+					if np.sum(mask_data_item>0)>100:
+						patches_bag["type"] = "tumor"		
+						patches_bag["label"] = 1						
+					else:
+						patches_bag["type"] = "normal"	
+						patches_bag["label"] = 0	
 					patches_bag["coord"] = np.array(coord) / scale
 					patches_bag["coord"] = patches_bag["coord"].astype(np.int16)
 					patches_bag["patch_level"] = patch_level
-					patches_bag["label"] = 0
 					patches_bag_list.append(patches_bag)
 					
 			# Annotation patch data

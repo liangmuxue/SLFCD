@@ -15,7 +15,7 @@ parser.add_argument('probs_map_path', default=None, metavar='PROBS_MAP_PATH',
                     type=str, help='Path to the input probs_map numpy file')
 parser.add_argument('coord_path', default=None, metavar='COORD_PATH',
                     type=str, help='Path to the output coordinates csv file')
-parser.add_argument('--level', default=6, type=int, help='at which WSI level'
+parser.add_argument('--level', default=1, type=int, help='at which WSI level'
                     ' the probability map was generated, default 6,'
                     ' i.e. inference stride = 64')
 parser.add_argument('--radius', default=12, type=int, help='radius for nms,'

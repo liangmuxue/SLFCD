@@ -26,49 +26,39 @@ def run(wsi_path,npy_path,json_path,level=0):
         single_name = json_file.split(".")[0]
         npy_file = os.path.join(npy_path,single_name+".npy")
         wsi_file_path = os.path.join(wsi_path,single_name+".svs")
-        #lsil
-        # if os.path.basename(wsi_file_path) == '49.svs':
-        #     continue
-        # if os.path.basename(wsi_file_path) == '4-CG23 10032 01.svs':
-        #     continue
-        #hsil
-        if os.path.basename(wsi_file_path) == '100-CG23_15432_02.svs':
-            continue
-        
             
-        slide = openslide.OpenSlide(wsi_file_path)
-        if len(slide.level_dimensions)<=level:
-            print("no level for {},ignore:".format(wsi_file_path))
-            continue        
-        w, h = slide.level_dimensions[level]
-        mask_tumor = np.zeros((h, w)) # the init mask, and all the value is 0
-    
-        # get the factor of level * e.g. level 6 is 2^6
-        factor = slide.level_downsamples[level]
-    
         try:
+            slide = openslide.OpenSlide(wsi_file_path)
+            if len(slide.level_dimensions)<=level:
+                print("no level for {},ignore:".format(wsi_file_path))
+                continue        
+            w, h = slide.level_dimensions[level]
+            mask_tumor = np.zeros((h, w)) # the init mask, and all the value is 0
+        
+            # get the factor of level * e.g. level 6 is 2^6
+            factor = slide.level_downsamples[level]            
             with open(json_file_path) as f:
                 dicts = json.load(f)
+            tumor_polygons = dicts['positive']
+        
+            for tumor_polygon in tumor_polygons:
+                # plot a polygon
+                name = tumor_polygon["name"]
+                group_name = tumor_polygon["group_name"]
+                vertices = np.array(tumor_polygon["vertices"]) / factor
+                vertices = vertices.astype(np.int32)
+                # different mask flag according to different group 
+                code = get_label_with_group_code(group_name)["code"]
+                mask_code = code
+                cv2.fillPoly(mask_tumor, [vertices], (mask_code))
+        
+            mask_tumor = mask_tumor.astype(np.uint8)
+        
+            np.save(npy_file, mask_tumor)
+            print("process {} ok".format(json_file))
         except Exception as e:
-            print("open json file fail,ignore:{}".format(json_file_path))
-            continue
-        tumor_polygons = dicts['positive']
-    
-        for tumor_polygon in tumor_polygons:
-            # plot a polygon
-            name = tumor_polygon["name"]
-            group_name = tumor_polygon["group_name"]
-            vertices = np.array(tumor_polygon["vertices"]) / factor
-            vertices = vertices.astype(np.int32)
-            # different mask flag according to different group 
-            code = get_label_with_group_code(group_name)["code"]
-            mask_code = code
-            cv2.fillPoly(mask_tumor, [vertices], (mask_code))
-    
-        mask_tumor = mask_tumor.astype(np.uint8)
-    
-        np.save(npy_file, mask_tumor)
-        print("process {} ok".format(json_file))
+            print("process json file fail,ignore:{}".format(json_file_path))
+            continue        
 
 def main(args):
     logging.basicConfig(level=logging.INFO)

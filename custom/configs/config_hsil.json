@@ -14,7 +14,7 @@
   "patch_path": "patches_level1",
   "data_path_train": "/home/liang/dataset/wsi/hsil/patches/train",
   "data_path_valid": "/home/liang/dataset/wsi/hsil/patches/valid",
-  "epochs": 20,
+  "epochs": 30,
   "log_every": 5,
   "num_workers": 5,
   "load_weight": true,

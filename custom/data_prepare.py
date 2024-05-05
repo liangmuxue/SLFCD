@@ -299,86 +299,6 @@ def patch_anno_img(xywh,patch_size=256,mask_threhold=0.9,mask_data=None,scale=4,
         patch_regions = np.array([])
     return patch_regions
 
-        
-# def patch_anno_img(xywh,mask_threhold,overlap_rate,is_edge_judge=False,patch_size=256,
-#                    mask_data=None,scale=4,file_path=None,label=1,file_name=None,index=0,level=1,wsi=None):
-#     """Crop annotation image with patch size"""
-#
-#     tumor_patch_path = os.path.join(file_path,"tumor_patch_img")
-#
-#     start_x,start_y,width,height = xywh
-#     start_x = start_x/scale
-#     start_y = start_y/scale
-#     end_x = start_x + width
-#     end_y = start_y + height
-#
-#
-#     def write_to_disk(patch_region,row=0,column=0):
-#         tumor_patch_file_path = os.path.join(tumor_patch_path,"{}/origin/{}_{}{}.jpg".format(label,file_name,row,column))
-#         top_left = (int(patch_region[0]*scale),int(patch_region[2]*scale))
-#         img_data = wsi.read_region(top_left, level, (patch_size, patch_size)).convert('RGB')
-#         img_data = cv2.cvtColor(np.array(img_data), cv2.COLOR_RGB2BGR)    
-#         cv2.imwrite(tumor_patch_file_path,img_data)
-#
-#     # Ignor small image
-#     if not is_edge_judge:
-#         if width<patch_size or height<patch_size:
-#             return None
-#         # ext_w = patch_size - width
-#         # ext_h = patch_size - height
-#         # region = [int(start_x - ext_w/2),int(end_x + ext_w/2),int(start_y - ext_h/2),int(end_y + ext_h/2)]
-#         # write_to_disk(region)
-#         # return np.expand_dims(np.array(region),axis=0)
-#
-#     def step_crop(row_index,column_index,overlap_rate):
-#         """Overlap crop image,Stopping crop when cross the border refer to patch length"""
-#         x_start = int(start_x + patch_size * column_index * overlap_rate)
-#         x_end = x_start + patch_size
-#         y_start = int(start_y + patch_size * row_index * overlap_rate)
-#         y_end = y_start + patch_size    
-#
-#         if not is_edge_judge:
-#             if y_start>end_y:
-#                 return None,-1         
-#             if x_start>end_x:
-#                 return None,0
-#
-#         patch_data = [x_start,x_end,y_start,y_end]
-#         return patch_data,0
-#
-#
-#     row = 0
-#     patch_regions = []
-#     # Iterate rows and columns one by one,and crop image by patch size
-#     while True:
-#         column = 0
-#         while True:
-#             patch_region,flag = step_crop(row,column,overlap_rate)
-#             # If cross the width border, then switch to next row
-#             if patch_region is None:
-#                 break
-#             # ReFilter with mask
-#             patch_masked = mask_data[patch_region[2]:patch_region[3],patch_region[0]:patch_region[1]]
-#             if (np.sum(patch_masked>0)/(patch_size*patch_size))>mask_threhold:
-#                 patch_regions.append(patch_region)
-#                 # Save to disk
-#                 write_to_disk(patch_region,row=row,column=column)
-#                 # viz_crop_patch(file_path,file_name,xywh,patch_region,viz=viz_debug)
-#             # else:
-#             #     viz_crop_patch(file_path,file_name,xywh,patch_region)
-#             column += 1  
-#         # Cross the height border, break
-#         if flag==-1:
-#             break                 
-#         row += 1
-#
-#     if len(patch_regions)>0:
-#         patch_regions = np.stack(patch_regions)
-#     else:
-#         patch_regions = np.array([])
-#     return patch_regions
-
-
     
 def build_annotation_patches(file_path,level=1,patch_size=64):
     """Load and build positive annotation data"""
@@ -656,6 +576,7 @@ def combine_mul_dataset_csv(file_path,types):
     combine_train_split.to_csv(train_file_path)
     combine_valid_split.to_csv(valid_file_path)
     combine_test_sp.to_csv(test_file_path)
+    
 if __name__ == '__main__':   
     parser = argparse.ArgumentParser(description='Get tumor mask of tumor-WSI and '
                                                  'save it in npy format')
@@ -667,11 +588,11 @@ if __name__ == '__main__':
     
     file_path = args.source
     is_normal = args.is_normal
-    # file_path = "/home/bavon/datasets/wsi/normal"
+    # file_path = "/home/liang/dataset/wsi/lsil"
     
     # align_xml_svs(file_path)
-    # is_normal = False
-    # build_data_csv(file_path,is_normal=is_normal)
+    is_normal = False
+    build_data_csv(file_path,is_normal=is_normal)
     # crop_with_annotation(file_path)
     #hsil
     # build_annotation_patches(file_path)
@@ -683,6 +604,6 @@ if __name__ == '__main__':
     # is_normal = False
     # build_normal_patches_image(file_path,is_normal=is_normal)
     # types = ["lsil","normal"]
-    types = ["hsil","normal"]
-    combine_mul_dataset_csv(file_path,types)   
+    types = ["lsil","normal"]
+    # combine_mul_dataset_csv(file_path,types)   
     

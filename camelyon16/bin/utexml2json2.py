@@ -16,7 +16,7 @@ parser.add_argument('--source', type=str,
 def run(args):
     
     file_path = args.source 
-    # file_path = "/home/bavon/datasets/wsi/lsil"
+    # file_path = "/home/liang/datasets/wsi/lsil"
     xml_path = os.path.join(file_path,"xml")
     json_path = os.path.join(file_path,"json")
     if not os.path.exists(json_path):

@@ -23,6 +23,7 @@
   输出目录 tumor_patch_img
 
 7 生成未标注区域对应的图片patch
+  data_prepare.py 的 filter_patches_exclude_anno 方法,从patch数据中删除标注区域
   data_prepare.py 的 build_normal_patches_image 方法  
   输出目录 tumor_patch_img
     
@@ -30,8 +31,13 @@
   train_with_clamdata.py    
     
 对于normal类型，适用 2,5,7
+
+二 一阶段测试及推理
+1 生成热力图
+ camelyon16/bin/probs_map.py
+
     
-二 第二阶段
+三 第二阶段
 
 1 生成patch特征值
   extract_features_fp.py
@@ -44,3 +50,10 @@
 3 训练
   clam/main.py
   --drop_out  --lr 1e-4 --k 10 --label_frac 0.5 --exp_code task_1_tumor_vs_normal_CLAM_50 --weighted_sample --bag_loss ce --inst_loss svm --task task_1_tumor_vs_normal --model_type clam_sb --log_data --data_dir /home/bavon/datasets/wsi/combine --results_dir results/combine
+  
+  
+  
+  
+  
+  
+  

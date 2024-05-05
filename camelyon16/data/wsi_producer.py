@@ -5,7 +5,7 @@ import PIL
 
 class WSIPatchDataset(Dataset):
 
-    def __init__(self, wsi_path, mask_path, image_size=256, crop_size=224,
+    def __init__(self, wsi_path, mask_path, image_size=256, crop_size=224,wsi_level=1,
                  normalize=True, flip='NONE', rotate='NONE'):
         self._wsi_path = wsi_path
         self._mask_path = mask_path
@@ -14,14 +14,19 @@ class WSIPatchDataset(Dataset):
         self._normalize = normalize
         self._flip = flip
         self._rotate = rotate
+        self.wsi_level = wsi_level
+        
         self._pre_process()
 
     def _pre_process(self):
         self._mask = np.load(self._mask_path)
+        # mask npy format is (Height,Width),need transpose here
+        self._mask = self._mask.transpose(1,0)
         self._slide = openslide.OpenSlide(self._wsi_path)
 
-        X_slide, Y_slide = self._slide.level_dimensions[0]
-        X_mask, Y_mask = self._mask.shape
+        X_slide, Y_slide = self._slide.level_dimensions[self.wsi_level]
+        
+        X_mask ,Y_mask = self._mask.shape
 
         if X_slide / X_mask != Y_slide / Y_mask:
             raise Exception('Slide/Mask dimension does not match ,'

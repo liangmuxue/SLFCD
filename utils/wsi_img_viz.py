@@ -13,10 +13,10 @@ import matplotlib.pyplot as plt
 import openslide
 from visdom import Visdom
 
-def viz_mask(img_path,npy_path):
+def viz_mask(img_path,npy_path,level=1):
     # PIL.Image.MAX_IMAGE_PIXELS = 933120000
     WSI_object = WholeSlideImage(img_path)
-    img = WSI_object.visWSI(vis_level=2)
+    img = WSI_object.visWSI(vis_level=level)
     ni = np.array(img)
     img = cv2.cvtColor(ni,cv2.COLOR_RGB2BGR) 
     mask_data = np.load(npy_path)
@@ -62,10 +62,10 @@ def viz_total_with_patch():
     vis_data(img_data)
 
 def viz_total_with_masks():
-    name = "12"
-    full_path = "/home/bavon/datasets/wsi/test/data/{}.svs".format(name)
-    xml_path = "/home/bavon/datasets/wsi/test/xml/{}.xml".format(name)
-    mask_path = "/home/bavon/datasets/wsi/test/tumor_mask/{}.npy".format(name)
+    name = "80-CG23_15084_02"
+    full_path = "/home/liang/dataset/wsi/hsil/data/{}.svs".format(name)
+    xml_path = "/home/liang/dataset/wsi/hsil/xml/{}.xml".format(name)
+    mask_path = "/home/liang/dataset/wsi/hsil/tumor_mask_level1/{}.npy".format(name)
     WSI_object = WholeSlideImage(full_path)
     WSI_object.initXML(xml_path)
     WSI_object.initMask(mask_path)
@@ -74,7 +74,7 @@ def viz_total_with_masks():
     scale = WSI_object.level_downsamples[level]
     # img.show()
     ni = np.array(img)
-    patch_file = os.path.join("/home/bavon/datasets/wsi/test/patches/{}.h5").format(name)    
+    patch_file = os.path.join("/home/liang/dataset/wsi/hsil/patches_level1/{}.h5").format(name)    
     theta = np.arange(0, 2*np.pi, 0.01)
     radius = 30
     mask_data = WSI_object.mask_data
@@ -86,10 +86,11 @@ def viz_total_with_masks():
             x = coord[0] + radius * np.cos(theta)
             y = coord[1] + radius * np.sin(theta)
             plt.fill(x, y, color='black')
-    plt.imshow(ni)
-    plt.axis('off')   
+    # plt.imshow(ni)
+    # plt.axis('off')   
     img_data = ptl_to_numpy(plt) 
-    vis_data(img_data)
+    # vis_data(img_data)
+    visdom_data(img_data,[])
 
 def attach_mask(img_data,mask_data):
     color_mask_data1 = repeat_with_color([128,0,0],img_data.shape[:2])
@@ -106,9 +107,9 @@ def attach_mask(img_data,mask_data):
          
     
 def viz_within_dataset():
-    file_path = "/home/bavon/datasets/wsi/hsil"
+    file_path = "/home/liang/dataset/wsi/hsil"
     csv_path = os.path.join(file_path,"viz_data.csv")
-    split_data = pd.read_csv(csv_path).values[:,0].tolist()
+    split_data = pd.read_csv(csv_path).values[0].tolist()
     wsi_path = os.path.join(file_path,"data")
     mask_path = os.path.join(file_path,"tumor_mask_level1")
     patch_level = 1
@@ -122,7 +123,7 @@ def viz_within_dataset():
     labels = []
     theta = np.arange(0, 2*np.pi, 0.01)
     radius = 30  
-    name = "8-CG23_12974_11" 
+    name = "80-CG23_15084_02" 
     wsi_file = os.path.join(wsi_path,name + ".svs")  
     # get whole wsi data for test
     wsi = openslide.open_slide(wsi_file)      
@@ -146,7 +147,6 @@ def viz_within_dataset():
         (img,label,img_ori,_) = data
         img_ori = img_ori.cpu().numpy().squeeze(0)
         item = dataset.patches_bag_list[i]
-        name = item["name"]
            
         # visdom_data(cv2.resize(total_img, (int(total_img.shape[1]/5),int(total_img.shape[0]/5))),[])            
         label = label.item()
@@ -163,7 +163,6 @@ def viz_within_dataset():
         if label==3:
             color_value = 255  
             color_mode = 'green'                                      
-        item = dataset.patches_bag_list[i]
         # print("draw point,x:{},y:{}".format(x_min,y_min))
         if label>0:
             region = item['region']
@@ -187,6 +186,7 @@ def viz_within_dataset():
                 
             radius = 60
         else:
+            name = item["name"]
             coord = (item['coord']).astype(np.int16)
             x_min = coord[0]
             x_max = coord[0] + patch_size
@@ -247,10 +247,12 @@ def viz_crop_patch(file_path,name,annotation_xywh,crop_region,patch_level=1,scal
                          
 if __name__ == '__main__':   
     img_path = "/home/bavon/datasets/wsi/test/9-CG23_12974_12.svs"
+    img_path = "/home/liang/dataset/wsi/hsil/data/80-CG23_15084_02.svs"
     mask_npy_path = "/home/bavon/datasets/wsi/test/mask/9-CG23_12974_12.npy"
+    mask_npy_path = "/home/liang/dataset/wsi/hsil/tumor_mask_level1/80-CG23_15084_02.npy"
     tumor_mask_npy_path = "/home/bavon/datasets/wsi/test/tumor_mask/9-CG23_12974_12.npy"
     normal_mask_npy_path = "/home/bavon/datasets/wsi/test/normal_mask/9-CG23_12974_12.npy"
-    # viz_mask(img_path,normal_mask_npy_path) 
+    # viz_mask(img_path,mask_npy_path) 
     # viz_total()
     # viz_total_with_patch()
     # viz_total_with_masks()

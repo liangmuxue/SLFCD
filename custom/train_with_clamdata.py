@@ -36,7 +36,7 @@ from utils.constance import get_label_cate
 
 sys.path.append(os.path.dirname(os.path.abspath(__file__)) + '/../../')
 
-# device = torch.device('cpu')
+device = torch.device('cuda')
 
 from utils.vis import vis_data,visdom_data
 from visdom import Visdom
