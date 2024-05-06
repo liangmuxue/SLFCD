@@ -24,8 +24,8 @@
 
 7 生成未标注区域对应的图片patch
   data_prepare.py 的 filter_patches_exclude_anno 方法,从patch数据中删除标注区域
-  data_prepare.py 的 build_normal_patches_image 方法  
-  输出目录 tumor_patch_img
+  data_prepare.py 的 build_normal_patches_image 方法  (Option)
+  输出目录 normal_patch_img
     
 8 训练
   train_with_clamdata.py    

@@ -72,7 +72,7 @@ def main(args):
     if not os.path.exists(npy_path):
         os.mkdir(npy_path)
     json_path = "{}/json".format(file_path)  
-    run(wsi_path,npy_path,json_path,level=1)
+    run(wsi_path,npy_path,json_path,level=level)
 
 if __name__ == "__main__":
     args = parser.parse_args()

@@ -95,18 +95,8 @@ def crop_with_annotation(file_path,level=1):
         json_file_path = os.path.join(json_path,json_file)  
         single_name = json_file.split(".")[0] 
         print("process:",single_name) 
-        # if single_name!="90-CG23 18908 01":
-        #     continue
         wsi_file = os.path.join(wsi_path,single_name + ".svs")  
         print('basename:',os.path.basename(wsi_file))
-        #LSIL
-        # if os.path.basename(wsi_file) == '49.svs':
-        #     continue
-        # if os.path.basename(wsi_file) == '4-CG23 10032 01.svs':
-        #     continue
-        #HSIL
-        if os.path.basename(wsi_file) == '100-CG23_15432_02.svs':
-            continue
         
         wsi = openslide.open_slide(wsi_file)  
         scale = wsi.level_downsamples[level]
@@ -133,12 +123,14 @@ def crop_with_annotation(file_path,level=1):
             # img_file_path = os.path.join(crop_img_path,img_file_name)
             # cv2.imwrite(img_file_path,crop_img)
             # print("save image:{}".format(img_file_name))
+            
         # Write region data to H5
         patch_file_path = os.path.join(patch_path,single_name+".h5")  
         with h5py.File(patch_file_path, "a") as f:
             if "crop_region" in f:
                 del f["crop_region"]
             f.create_dataset('crop_region', data=np.array(region_data)) 
+            # 每一个剪裁区域都对应一个标签
             f['crop_region'].attrs['label_data'] = label_data
             
 #lsil
@@ -243,15 +235,6 @@ def patch_anno_img(xywh,patch_size=256,mask_threhold=0.9,mask_data=None,scale=4,
         img_data = cv2.cvtColor(np.array(img_data), cv2.COLOR_RGB2BGR)    
         cv2.imwrite(tumor_patch_file_path,img_data)
 
-    # Ignor small image
-    if width<patch_size or height<patch_size:
-        return None
-        # ext_w = patch_size - width
-        # ext_h = patch_size - height
-        # region = [int(start_x - ext_w/2),int(end_x + ext_w/2),int(start_y - ext_h/2),int(end_y + ext_h/2)]
-        # write_to_disk(region)
-        # return np.expand_dims(np.array(region),axis=0)
-
     def step_crop(row_index,column_index,overlap_rate=0.3):
         """Overlap crop image,Stopping crop when cross the border refer to patch length"""
         x_start = int(start_x + patch_size * column_index * overlap_rate)
@@ -280,7 +263,8 @@ def patch_anno_img(xywh,patch_size=256,mask_threhold=0.9,mask_data=None,scale=4,
                 break
             # ReFilter with mask
             patch_masked = mask_data[patch_region[2]:patch_region[3],patch_region[0]:patch_region[1]]
-            if (np.sum(patch_masked>0)/(patch_size*patch_size))>mask_threhold:
+            # 当掩码数量超过阈值时，说明属于对应标签的类别
+            if (np.sum(patch_masked==label)/(patch_size*patch_size))>mask_threhold:
                 patch_regions.append(patch_region)
                 # Save to disk
                 write_to_disk(patch_region,row=row,column=column)
@@ -300,7 +284,7 @@ def patch_anno_img(xywh,patch_size=256,mask_threhold=0.9,mask_data=None,scale=4,
     return patch_regions
 
     
-def build_annotation_patches(file_path,level=1,patch_size=64):
+def build_annotation_patches(file_path,level=1,patch_size=64,mask_threhold=0.5):
     """Load and build positive annotation data"""
     
     patch_path = file_path + "/patches_level{}".format(level)
@@ -309,7 +293,7 @@ def build_annotation_patches(file_path,level=1,patch_size=64):
     for xml_file in os.listdir(xml_path):
         file_name = xml_file.split(".")[0]
         patch_file = os.path.join(patch_path,"{}.h5".format(file_name))
-        # if file_name!="9-CG23_10410_01":
+        # if file_name!="80-CG23_15274_01":
         #     continue
         patch_file_path = os.path.join(patch_path,patch_file)
         wsi_file_path = os.path.join(wsi_path,file_name+".svs")
@@ -325,13 +309,13 @@ def build_annotation_patches(file_path,level=1,patch_size=64):
             patches = []
             patches_length = 0
             db_keys = []
-            
-            for i in range(len(label_data)):
+            # 遍历每个剪裁区域
+            for i in range(crop_region.shape[0]):
                 region = crop_region[i]
                 label = label_data[i]
                 # Patch for every annotation images,Build patches coordinate data list 
-                patch_data = patch_anno_img(region,mask_data=mask_data,patch_size=patch_size,scale=scale,file_path=file_path,
-                                            file_name=file_name,label=label,index=i,level=level,wsi=wsi)   
+                patch_data = patch_anno_img(region,mask_data=mask_data,patch_size=patch_size,mask_threhold=mask_threhold,scale=scale,
+                                            file_path=file_path,file_name=file_name,label=label,index=i,level=level,wsi=wsi)   
                 if patch_data is None:
                     # viz_crop_patch(file_path,file_name,region,None)                    
                     patch_data = np.array([])
@@ -434,6 +418,9 @@ def filter_patches_exclude_anno(file_path,level=1,patch_size=256):
         scale = wsi.level_downsamples[level]
         mask_path = os.path.join(file_path,"tumor_mask_level{}".format(level))
         npy_file = os.path.join(mask_path,file_name+".npy") 
+        if not os.path.exists(npy_file):
+            print("file not exists:{}".format(npy_file))
+            continue
         mask_data = np.load(npy_file)
         
         target_coords = []  
@@ -592,14 +579,14 @@ if __name__ == '__main__':
     
     # align_xml_svs(file_path)
     is_normal = False
-    build_data_csv(file_path,is_normal=is_normal)
-    # crop_with_annotation(file_path)
+    # build_data_csv(file_path,is_normal=is_normal)
+    # crop_with_annotation(file_path,level=args.level)
     #hsil
-    # build_annotation_patches(file_path)
+    # build_annotation_patches(file_path,mask_threhold=0.5,level=args.level)
     #lsil
     # build_annotation_patches_lsil(file_path,0.2,0.8,True)
     # aug_annotation_patches(file_path,'lsil',33)
-    # filter_patches_exclude_anno(file_path)
+    filter_patches_exclude_anno(file_path,level=args.level)
     
     # is_normal = False
     # build_normal_patches_image(file_path,is_normal=is_normal)

@@ -32,11 +32,12 @@ from clam.datasets.dataset_h5 import Dataset_All_Bags
 from clam.datasets.dataset_combine import Whole_Slide_Bag_COMBINE
 from clam.utils.utils import print_network, collate_features
 from camelyon16.data.image_producer import ImageDataset
-from utils.constance import get_label_cate
+from utils.constance import get_label_cate,get_label_cate_num
 
 sys.path.append(os.path.dirname(os.path.abspath(__file__)) + '/../../')
 
-device = torch.device('cuda')
+device = torch.device('cuda:0')
+# device = torch.device('cpu')
 
 from utils.vis import vis_data,visdom_data
 from visdom import Visdom
@@ -68,7 +69,7 @@ class CoolSystem(pl.LightningModule):
         model = chose_model(hparams.model)
         model = model.to(device)
         fc_features = model.fc.in_features
-        model.fc = nn.Linear(fc_features, len(get_label_cate()))        
+        model.fc = nn.Linear(fc_features, len(get_label_cate(mode=hparams.mode)))        
         self.model = model.to(device)
         self.loss_fn = nn.CrossEntropyLoss().to(device)
         self.loss_fn.requires_grad_(True)
@@ -87,7 +88,8 @@ class CoolSystem(pl.LightningModule):
             ], lr=self.params.lr, momentum=self.params.momentum)
         optimizer = torch.optim.Adam([
                 {'params': self.model.parameters()},
-            ],  weight_decay=1e-4,lr=self.params.lr)
+            ],  weight_decay=1e-4,lr=self.params.lr,capturable=True)
+        # optimizer.param_groups[0]['capturable'] = True
         scheduler = torch.optim.lr_scheduler.StepLR(optimizer=optimizer,gamma=0.3, step_size=5)
         # scheduler = torch.optim.lr_scheduler.CyclicLR(optimizer=optimizer,base_lr=1e-4,max_lr=1e-3,step_size_up=30)
         scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer=optimizer,T_max=16,eta_min=1e-4)
@@ -149,13 +151,14 @@ class CoolSystem(pl.LightningModule):
         acc = pred_acc_bool.type(torch.float).sum().data * 1.0 / self.params.batch_size
         
         # Calculate the accuracy of each category separately
-        all_labes = get_label_cate()
+        all_labes = get_label_cate(mode=self.params.mode)
         results = []
         for label in all_labes:
-            pred_index = torch.where(predicts==label)[0]
-            acc_cnt = torch.sum(y[pred_index]==label)
-            fail_cnt = torch.sum(y[pred_index]!=label)
-            label_cnt = torch.sum(y==label)
+            label_num = get_label_cate_num(label,mode=self.params.mode)
+            pred_index = torch.where(predicts==label_num)[0]
+            acc_cnt = torch.sum(y[pred_index]==label_num)
+            fail_cnt = torch.sum(y[pred_index]!=label_num)
+            label_cnt = torch.sum(y==label_num)
             results.append([label,acc_cnt.cpu().item(),fail_cnt.cpu().item(),label_cnt.cpu().item()])
             
         # Sample Viz
@@ -202,7 +205,7 @@ class CoolSystem(pl.LightningModule):
         columns = ["label","acc_cnt","fail_cnt","real_cnt"]
         results_pd = pd.DataFrame(self.results,columns=columns)
         
-        all_labes = get_label_cate()
+        all_labes = get_label_cate(mode=self.params.mode)
         for label in all_labes:
             acc_cnt = results_pd[results_pd["label"]==label]["acc_cnt"].sum()
             fail_cnt = results_pd[results_pd["label"]==label]["fail_cnt"].sum()
@@ -229,7 +232,7 @@ class CoolSystem(pl.LightningModule):
         split_data = pd.read_csv(csv_path).values[:,0].tolist()
         wsi_path = os.path.join(file_path,"data")
         mask_path = os.path.join(file_path,tumor_mask_path)
-        dataset_train = Whole_Slide_Bag_COMBINE(file_path,wsi_path,mask_path,work_type="train",patch_path=hparams.patch_path,
+        dataset_train = Whole_Slide_Bag_COMBINE(file_path,wsi_path,mask_path,work_type="train",mode=hparams.mode,patch_path=hparams.patch_path,
                                                 patch_size=hparams.image_size,split_data=split_data,patch_level=hparams.patch_level)
         train_loader = DataLoader(dataset_train,
                                       batch_size=self.params.batch_size,
@@ -247,7 +250,7 @@ class CoolSystem(pl.LightningModule):
         split_data = pd.read_csv(csv_path).values[:,0].tolist()
         wsi_path = os.path.join(file_path,"data")
         mask_path = os.path.join(file_path,tumor_mask_path)
-        dataset_valid = Whole_Slide_Bag_COMBINE(file_path,wsi_path,mask_path,work_type="valid",patch_path=hparams.patch_path,
+        dataset_valid = Whole_Slide_Bag_COMBINE(file_path,wsi_path,mask_path,work_type="valid",mode=hparams.mode,patch_path=hparams.patch_path,
                                                 patch_size=hparams.image_size,split_data=split_data,patch_level=hparams.patch_level)
         val_loader = DataLoader(dataset_valid,
                                       batch_size=self.params.batch_size,
@@ -281,7 +284,6 @@ def get_last_ck_file(checkpoint_path):
     return list[-1]
 
 def main(hparams,device_ids=None):
-    device = torch.device('cuda:{}'.format(device_ids))  
     checkpoint_path = os.path.join(hparams.work_dir,"checkpoints",hparams.model_name)
     filename = 'slfcd-{epoch:02d}-{val_loss:.2f}'
     
@@ -368,7 +370,8 @@ if __name__ == '__main__':
     device_ids = args.device_ids
       
     # cnn_path = 'custom/configs/config_lsil.json'
-    cnn_path = 'custom/configs/config_hsil.json'
+    # cnn_path = 'custom/configs/config_hsil.json'
+    cnn_path = 'custom/configs/config_lsil_liang.json'
     with open(cnn_path, 'r') as f:
         args = json.load(f) 
     hyperparams = Namespace(**args)    

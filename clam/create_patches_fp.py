@@ -269,7 +269,7 @@ parser.add_argument('--is_normal', default=False, action='store_false')
 if __name__ == '__main__':
 	args = parser.parse_args()
 
-	patch_save_dir = os.path.join(args.save_dir, 'patches_level1')
+	patch_save_dir = os.path.join(args.save_dir, 'patches_level{}'.format(args.patch_level))
 	mask_save_dir = os.path.join(args.save_dir, 'masks')
 	stitch_save_dir = os.path.join(args.save_dir, 'stitches')
 
