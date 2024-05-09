@@ -8,8 +8,9 @@ import json
 import openslide
 import cv2
 import h5py
-from utils.constance import get_label_with_group_code,get_combine_label_with_type,get_combine_label_dict
+from utils.constance import get_label_with_group_code,get_combine_label_with_type,get_tumor_label_cate
 from utils.wsi_img_viz import viz_crop_patch
+from utils.cv_utils import rect_overlap
 
 from visdom import Visdom
 from pickle import FALSE
@@ -335,44 +336,119 @@ def build_annotation_patches(file_path,level=1,patch_size=64,mask_threhold=0.5):
             print("patch {} ok".format(file_name))
 
 
-def build_annotation_patches_lsil(file_path,mask_thredhold,overlap_rate,is_edge_judge,level=1,patch_size=64):
+def build_annotation_patches_det(file_path,level=1,patch_size=64,mask_threhold=0.2,data_type=None):
+    """根据标注生成切片，针对目标检测模式"""
     
     patch_path = file_path + "/patches_level{}".format(level)
     wsi_path = file_path + "/data"
-    for patch_file in os.listdir(patch_path):
-        file_name = patch_file.split(".")[0]
-        # if file_name!="9-CG23_10410_01":
+    xml_path = file_path + "/xml"
+    labels = get_tumor_label_cate(data_type)
+    
+    for xml_file in os.listdir(xml_path):
+        file_name = xml_file.split(".")[0]
+        patch_file = os.path.join(patch_path,"{}.h5".format(file_name))
+        # if file_name!="80-CG23_15274_01":
         #     continue
         patch_file_path = os.path.join(patch_path,patch_file)
         wsi_file_path = os.path.join(wsi_path,file_name+".svs")
+        json_file_path = os.path.join(file_path,"json",file_name+".json")
         wsi = openslide.open_slide(wsi_file_path)
         scale = wsi.level_downsamples[level]
-        mask_path = os.path.join(file_path,"tumor_mask_level{}".format(level))
-        npy_file = os.path.join(mask_path,file_name+".npy") 
-        if os.path.basename(npy_file) == '14-CG23_10773_01.npy':
-            continue
-        if os.path.basename(npy_file) == '32.npy':
-            continue
-        mask_data = np.load(npy_file)
-        save_path = os.path.join(file_path,"tumor_patch_img")
-        if not os.path.exists(save_path):
-            os.mkdir(save_path)
+        
         with h5py.File(patch_file_path, "a") as f:
-            if not "coords" in f:
-                print("coords not in:{}".format(file_name))
-                continue   
-            coords = f['coords'][:]
-            for idx,coord in enumerate(coords):
-                if judge_patch_anno_lsil(coord,mask_thredhold=mask_thredhold,mask_data=mask_data,scale=scale,patch_size=patch_size):
-                    
-                    crop_img = np.array(wsi.read_region(coord, level, (patch_size,patch_size)).convert("RGB"))
-                    crop_img = cv2.cvtColor(crop_img,cv2.COLOR_RGB2BGR) 
-                    # save_file_path = os.path.join(save_path,"{}.jpg".format(idx))
-                    label = label_patch_anno(coord,mask_data=mask_data,scale=scale,patch_size=patch_size)
-                    save_file_path = os.path.join(save_path,"{}/origin/{}_{}.jpg".format(label,file_name,idx))
-                    cv2.imwrite(save_file_path,crop_img)
-            print("write image ok:{}".format(file_name))
-    
+            try:
+                coords = np.array(f['coords'])
+            except Exception as e:
+                print("coords data None:{}".format(patch_file_path))
+                continue
+            crop_region = f['crop_region'][:]
+            label_data = []
+            patches_length = 0
+            bboxes_data = []
+            anno_regions = get_anno_box_datas(json_file_path,scale=scale)
+            max_box_len = 0
+            # 遍历每个剪裁区域
+            for i in range(coords.shape[0]):
+                coord = coords[i]
+                # 取得对应坐标范围的图片
+                top_left = (int(coord[0]*scale),int(coord[1]*scale))
+                patch_region = (top_left[0], top_left[1], patch_size, patch_size)  
+                # 根据掩码数据，判断是否具备相关标注,并生成标注框(标注框有可能为多个)
+                label,bboxes = build_patch_anno(patch_region,labels=labels,patch_size=patch_size,mask_threhold=mask_threhold,anno_regions=anno_regions)   
+                box_len = len(bboxes)
+                max_box_len=box_len if max_box_len<box_len else max_box_len
+                label_data.append(label)
+                bboxes_data.append(bboxes)
+            
+            boxes_len = []  
+            # 再次拼接为一个完整的数组,按照最大候选框数量构建数组
+            bboxes_data_arr = np.zeros((len(bboxes_data),max_box_len,5))
+            for i in range(len(bboxes_data)):
+                # 记录patch中的标注框数量
+                boxes_len.append(len(bboxes_data[i]))
+                if len(bboxes_data[i])>0:
+                    bboxes_data_arr[i,:len(bboxes_data[i]),:] = np.array(bboxes_data[i])
+                
+            # 从新创建标注数据集
+            if "annotations" in f:
+                del f["annotations"]            
+            f.create_dataset("annotations", data=bboxes_data_arr)    
+            # 记录标签信息
+            f["annotations"].attrs['label_data'] = label_data    
+            f["annotations"].attrs['boxes_len'] = boxes_len    
+            print("patch {} ok".format(file_name))
+
+def get_anno_box_datas(json_filepath,scale=1):
+    """取得标注数据,返回矩形候选框格式"""
+
+    with open(json_filepath) as f:
+        dicts = json.load(f)
+    tumor_polygons = dicts['positive']    
+    anno_regions = []
+    for tumor_polygon in tumor_polygons:
+        # plot a polygon
+        name = tumor_polygon["name"]
+        group_name = tumor_polygon["group_name"]
+        vertices = np.array(tumor_polygon["vertices"]) / scale
+        vertices = vertices.astype(np.int32)
+        # different mask flag according to different group 
+        code = get_label_with_group_code(group_name)["code"]    
+        # 编码和矩形区域对应，box格式:xyxy
+        region = {"code":code,"region":[vertices.min(axis=0)[0],vertices.min(axis=0)[1],vertices.max(axis=0)[0],vertices.max(axis=0)[1]]}
+        anno_regions.append(region)
+    return anno_regions
+
+def build_patch_anno(patch_region,labels=None,mask_threhold=0.5,patch_size=64,anno_regions=None):
+    """对于patch区域，根据是否有标注目标，生成相关数据"""
+
+    # xywh转xyxy
+    patch_region = [patch_region[0],patch_region[1],patch_region[0]+patch_region[2],patch_region[1]+patch_region[3]]
+    bboxes = []
+    max_area = 0
+    label = 0
+    # if patch_region[0]>5000 and patch_region[1]>1500:
+    #     print("ggg")
+    # 循环所有标注区域，查找是否与当前patch区域相交
+    for anno_region in anno_regions:
+        region = anno_region["region"]
+        code = anno_region["code"]
+        # 取得相交区域
+        ret = rect_overlap(region,patch_region)
+        if len(ret)==0:
+            continue
+        (X1,Y1,X2,Y2,area) = ret
+        # 相交面积与标注本身的面积比例大于指定阈值，则认为是可用
+        area_rate = area/(patch_size*patch_size)
+        if area_rate<mask_threhold:
+            continue
+        # 根据最大面积取得整区域的标签
+        if area>max_area:
+            max_area = area
+            label = code
+        # 记录相交区域，以及对应标签
+        box = [X1,Y1,X2,Y2,code]
+        bboxes.append(box)
+    return label,bboxes  
 
 def aug_annotation_patches(file_path,type,number,level=1):
     import Augmentor
@@ -568,25 +644,24 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Get tumor mask of tumor-WSI and '
                                                  'save it in npy format')
     parser.add_argument('--source', default=None, type=str,help='Path to the WSI file')
-    parser.add_argument('--is_normal',default=False, action='store_true')
+    parser.add_argument('--data_type',default='lsil', type=str,help='数据类别：hsil lsil ais')
     parser.add_argument('--level', default=1, type=int, help='at which WSI level to obtain the mask, default 1')    
+    parser.add_argument('--patch_size', default=64, type=int, help='切片尺寸，默认64*64')
     
     args = parser.parse_args()
     
     file_path = args.source
-    is_normal = args.is_normal
     # file_path = "/home/liang/dataset/wsi/lsil"
     
     # align_xml_svs(file_path)
-    is_normal = False
     # build_data_csv(file_path,is_normal=is_normal)
     # crop_with_annotation(file_path,level=args.level)
-    #hsil
-    # build_annotation_patches(file_path,mask_threhold=0.5,level=args.level)
-    #lsil
-    # build_annotation_patches_lsil(file_path,0.2,0.8,True)
+    # 识别模式
+    # build_annotation_patches(file_path,mask_threhold=0.5,level=args.level,patch_size=args.patch_size)
+    # 目标检测模式
+    build_annotation_patches_det(file_path,mask_threhold=0.005,level=args.level,patch_size=args.patch_size,data_type=args.data_type)
     # aug_annotation_patches(file_path,'lsil',33)
-    filter_patches_exclude_anno(file_path,level=args.level)
+    # filter_patches_exclude_anno(file_path,level=args.level)
     
     # is_normal = False
     # build_normal_patches_image(file_path,is_normal=is_normal)

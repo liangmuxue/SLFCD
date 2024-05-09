@@ -9,7 +9,7 @@ import time
 import argparse
 import pdb
 import pandas as pd
-
+import shutil  
 
 def stitching(file_path, wsi_object, downscale=64):
 	start = time.time()
@@ -57,8 +57,18 @@ def seg_and_patch(source, save_dir, patch_save_dir, mask_save_dir, stitch_save_d
 				  use_default_params=False,
 				  seg=False, save_mask=True,
 				  stitch=False,
+				  cover=False,
 				  patch=False, auto_skip=True, process_list=None, is_normal=False):
-
+	
+	# 如果有覆盖的标志，则先清除相关文件
+	if cover:
+		# 清除所有h5文件
+		h5_path = os.path.join(source,"patch_level{}".format(patch_level))
+		shutil.rmtree(h5_path)  
+		os.mkdir(h5_path)  
+		# 清除列表文件
+		os.remove(os.path.join(save_dir, 'process_list_autogen.csv'))
+		
 	wsi_source = os.path.join(source, "data")
 	slides = sorted(os.listdir(wsi_source))
 	slides = [slide for slide in slides if os.path.isfile(os.path.join(wsi_source, slide))]
@@ -265,6 +275,7 @@ parser.add_argument('--patch_level', type=int, default=1,
 parser.add_argument('--process_list', type=str, default=None,
 					help='name of list of images to process with parameters (.csv)')
 parser.add_argument('--is_normal', default=False, action='store_false')
+parser.add_argument('--cover', default=False, action='store_false')
 
 if __name__ == '__main__':
 	args = parser.parse_args()
@@ -327,4 +338,5 @@ if __name__ == '__main__':
 											seg=args.seg, use_default_params=False, save_mask=True,
 											stitch=args.stitch,
 											patch_level=args.patch_level, patch=args.patch,
+											cover=args.cover,
 											process_list=process_list, auto_skip=args.no_auto_skip, is_normal=args.is_normal)

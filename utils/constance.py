@@ -36,7 +36,7 @@ def get_label_cate_num(label_code,mode='hsil'):
     item = get_label_with_code(label_code)      
     return item["seq"]
 
-def get_tumor_label_cate(mode=1):
+def get_tumor_label_cate(mode=None):
     if mode=='hsil':
         cate = [1,2,3]
     elif mode=='lsil':

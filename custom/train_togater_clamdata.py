@@ -386,7 +386,7 @@ def data_summarize(dataloader):
     print("label_stat 1:{},2:{},3:{}".format(np.sum(label_stat==1),np.sum(label_stat==2),np.sum(label_stat==3)))
 
 if __name__ == '__main__':
-    cnn_path = 'custom/configs/config_together.json'
+    cnn_path = 'custom/configs/config_lsil_liang.json'
     with open(cnn_path, 'r') as f:
         args = json.load(f) 
     hyperparams = Namespace(**args)    

@@ -7,7 +7,7 @@ import PIL
 from openslide import ImageSlide
 from torch.utils.data import DataLoader
 from wsi_core.WholeSlideImage import WholeSlideImage
-from clam.datasets.dataset_combine import Whole_Slide_Bag_COMBINE
+from clam.datasets.dataset_combine import Whole_Slide_Bag_COMBINE,Whole_Slide_Det
 import h5py
 import matplotlib.pyplot as plt
 import openslide
@@ -37,8 +37,8 @@ def viz_total():
     vis_data(ni,[])
     
 def viz_total_with_patch():
-    full_path = "/home/bavon/datasets/wsi/test/data/12.svs"
-    xml_path = "/home/bavon/datasets/wsi/test/xml/12.xml"
+    full_path = "/home/liang/dataset/wsi/lsil/data/1-2023_10411_01.svs"
+    xml_path = "/home/liang/dataset/wsi/lsil/xml/1-2023_10411_01.xml"
     WSI_object = WholeSlideImage(full_path)
     WSI_object.initXML(xml_path)
     level = 1
@@ -47,7 +47,7 @@ def viz_total_with_patch():
     # img.show()
     ni = np.array(img)
     vis_data(ni)
-    patch_file = os.path.join("/home/bavon/datasets/wsi/test/patches/12.h5")    
+    patch_file = os.path.join("/home/liang/dataset/wsi/lsil/patches_level0/1-2023_10411_01.h5")    
     theta = np.arange(0, 2*np.pi, 0.01)
     radius = 30
     plt.imshow(ni)
@@ -107,23 +107,24 @@ def attach_mask(img_data,mask_data):
          
     
 def viz_within_dataset():
-    file_path = "/home/liang/dataset/wsi/hsil"
+    file_path = "/home/liang/dataset/wsi/lsil"
     csv_path = os.path.join(file_path,"viz_data.csv")
-    split_data = pd.read_csv(csv_path).values[0].tolist()
+    split_data = pd.read_csv(csv_path).values[:,0].tolist()
     wsi_path = os.path.join(file_path,"data")
-    mask_path = os.path.join(file_path,"tumor_mask_level1")
-    patch_level = 1
-    dataset = Whole_Slide_Bag_COMBINE(file_path,wsi_path,mask_path,patch_path="patches_level1",patch_level=patch_level,split_data=split_data)
+    mask_path = os.path.join(file_path,"tumor_mask_level0")
+    patch_level = 0
+    patch_size = 512
+    dataset = Whole_Slide_Det(file_path,wsi_path,mask_path,patch_path="patches_level0",patch_level=patch_level,patch_size=patch_size,split_data=split_data)
     data_loader = DataLoader(dataset,
                                   batch_size=1,
                                   num_workers=0)   
      
     top_left = (0,0)
-    patch_size = 256
+    
     labels = []
     theta = np.arange(0, 2*np.pi, 0.01)
     radius = 30  
-    name = "80-CG23_15084_02" 
+    name = "1-2023_10411_01" 
     wsi_file = os.path.join(wsi_path,name + ".svs")  
     # get whole wsi data for test
     wsi = openslide.open_slide(wsi_file)      
@@ -136,7 +137,6 @@ def viz_within_dataset():
     mask_data = np.load(npy_file) 
     total_img = attach_mask(total_img,mask_data)  
     plt.figure(figsize=(10, 8))
-    cut_flag = False
     viz_tumor = Visdom(env="tumor", port=8098)
     viz_normal = Visdom(env="normal", port=8098)
     viz_number_tumor = 0
@@ -144,50 +144,61 @@ def viz_within_dataset():
     
     for i, data in enumerate(data_loader):
         
-        (img,label,img_ori,_) = data
+        img_ori = data['img']
         img_ori = img_ori.cpu().numpy().squeeze(0)
         item = dataset.patches_bag_list[i]
-           
-        # visdom_data(cv2.resize(total_img, (int(total_img.shape[1]/5),int(total_img.shape[0]/5))),[])            
-        label = label.item()
-        labels.append(label)
-        if label==0:
-            color_value = 0
-            color_mode = 'black'
-        if label==1:
-            color_value = 64    
-            color_mode = 'blue' 
-        if label==2:
-            color_value = 128    
-            color_mode = 'red'  
-        if label==3:
-            color_value = 255  
-            color_mode = 'green'                                      
-        # print("draw point,x:{},y:{}".format(x_min,y_min))
-        if label>0:
-            region = item['region']
-            scale = item['scale']
-            x_min = region[0]
-            x_max = x_min + patch_size
-            if (x_max>total_img.shape[1]):
-                x_max = total_img.shape[1]- 1
-            y_min = region[2]
-            y_max = y_min + patch_size
-            if (y_max>total_img.shape[0]):
-                y_max = total_img.shape[0] - 1   
-            total_img[y_min:y_max,x_min,:] = color_value 
-            total_img[y_min:y_max,x_max,:] = color_value
-            total_img[y_min,x_min:x_max,:] = color_value
-            total_img[y_max,x_min:x_max,:] = color_value 
-            
-            if viz_number_tumor<10:   
-                visdom_data(img_ori,[],viz=viz_tumor) 
-                viz_number_tumor += 1 
+        name = item["name"]
+        coord = item["coord"]
+        scale = item["scale"]
+        label = item["label"]
+        annot = item["bboxes"]
+        # visdom_data(cv2.resize(total_img, (int(total_img.shape[1]/5),int(total_img.shape[0]/5))),[])    
+        
+        if label>0:   
+            # 循环画出标注框   
+            for anno_item in annot:
+                anno_label = anno_item[-1]
+                # 不同标注不同区域颜色
+                if anno_label==0:
+                    color_value = 0
+                    color_mode = 'black'
+                if anno_label==1:
+                    color_value = 64    
+                    color_mode = 'blue' 
+                if anno_label==2:
+                    color_value = 128    
+                    color_mode = 'red'  
+                if anno_label==3:
+                    color_value = 255  
+                    color_mode = 'green'             
                 
-            radius = 60
+                region = anno_item[:-1]
+                # 相对坐标转绝对坐标
+                region[0] = region[0] + coord[0]
+                region[1] = region[1] + coord[1]
+                region[2] = region[2] + coord[0]
+                region[3] = region[3] + coord[1]
+                x_min = region[0]
+                x_max = region[2]
+                if (x_max>total_img.shape[1]):
+                    x_max = total_img.shape[1] - 1
+                y_min = region[1]
+                y_max = region[3]
+                if (y_max>total_img.shape[0]):
+                    y_max = total_img.shape[0] - 1   
+                total_img[y_min:y_max,x_min:x_max,:] = color_value 
+                # total_img[y_min:y_max,x_max,:] = color_value
+                # total_img[y_min,x_min:x_max,:] = color_value
+                # total_img[y_max,x_min:x_max,:] = color_value 
+                    
+                # if viz_number_tumor<10:   
+                #     visdom_data(img_ori,[],viz=viz_tumor) 
+                #     viz_number_tumor += 1 
+                # radius = 60
         else:
-            name = item["name"]
-            coord = (item['coord']).astype(np.int16)
+            color_value = 0
+            color_mode = 'black'            
+            # 画出patch分割框线
             x_min = coord[0]
             x_max = coord[0] + patch_size
             if (x_max>total_img.shape[1]):
@@ -200,7 +211,8 @@ def viz_within_dataset():
             total_img[y_min:y_max,x_min,:] = color_value 
             total_img[y_min:y_max,x_max,:] = color_value
             total_img[y_min,x_min:x_max,:] = color_value
-            total_img[y_max,x_min:x_max,:] = color_value            
+            total_img[y_max,x_min:x_max,:] = color_value   
+            # 框线之间的点，醒目标记         
             radius = 30
             x = x_min + radius * np.cos(theta)
             y = y_min + radius * np.sin(theta)
@@ -208,17 +220,12 @@ def viz_within_dataset():
             if viz_number_normal<10:   
                 visdom_data(img_ori,[],viz=viz_normal) 
                 viz_number_normal += 1 
-
     plt.imshow(total_img)
     plt.axis('off')  
     img_data = ptl_to_numpy(plt) 
     # small_img = cv2.resize(img_data, (int(img_data.shape[1]/3),int(img_data.shape[0]/3)))        
     visdom_data(img_data,[])
     # cv2.imwrite("/home/bavon/Downloads/img.png",img_data)
-    labels = np.array(labels)
-    total_len = labels.shape[0]
-    mask_len = np.sum(labels>0)
-    print("total_len:{},mask_len:{}".format(total_len,mask_len))
     
     
 def viz_crop_patch(file_path,name,annotation_xywh,crop_region,patch_level=1,scale=4,viz=None):

@@ -1,5 +1,5 @@
 {
-  "mode": "lsil",
+  "mode": "hsil",
   "model": "resnet50",
   "batch_size": 8,
   "image_size": 512,
@@ -8,7 +8,7 @@
   "normalize": "True",
   "lr": 1e-4,
   "momentum": 0.9,
-  "data_path": "/home/liang/dataset/wsi/lsil",
+  "data_path": "/home/liang/dataset/wsi/hsil",
   "train_csv": "train.csv",
   "valid_csv": "valid.csv",
   "tumor_mask_path": "tumor_mask_level0",
@@ -17,8 +17,9 @@
   "data_path_valid": "/home/liang/dataset/wsi/lsil/patches/valid",
   "epochs": 100,
   "log_every": 5,
-  "num_workers": 0,
+  "num_workers": 6,
   "load_weight": false,
-  "model_name" : "lsil_det_parclass",
+  "model_name" : "hsil_det_parclass",
   "work_dir": "results"
 }
+

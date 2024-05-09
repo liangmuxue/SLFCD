@@ -19,10 +19,10 @@
   data_prepare.py 的 build_data_csv 方法
   
 6 生成标注对应的图片patch
-  data_prepare.py 的 crop_with_annotation 以及 build_annotation_patches 方法  
+  data_prepare.py 的 crop_with_annotation 以及 build_annotation_patches (目标检测版本使用build_annotation_patches) 方法  
   输出目录 tumor_patch_img
 
-7 生成未标注区域对应的图片patch
+7 生成未标注区域对应的图片patch (目标检测版本中取消)
   data_prepare.py 的 filter_patches_exclude_anno 方法,从patch数据中删除标注区域
   data_prepare.py 的 build_normal_patches_image 方法  (Option)
   输出目录 normal_patch_img

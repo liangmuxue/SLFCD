@@ -29,7 +29,7 @@ from pytorch_lightning.callbacks import ModelCheckpoint
 from pytorch_lightning.trainer.states import RunningStage
 import numpy as np
 from clam.datasets.dataset_h5 import Dataset_All_Bags
-from clam.datasets.dataset_combine import Whole_Slide_Bag_COMBINE
+from clam.datasets.dataset_combine import Whole_Slide_Bag_COMBINE,Whole_Slide_Det
 from clam.utils.utils import print_network, collate_features
 from camelyon16.data.image_producer import ImageDataset
 from utils.constance import get_label_cate,get_label_cate_num

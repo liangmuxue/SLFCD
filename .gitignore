@@ -6,3 +6,4 @@ lightning_logs/**
 clam/heatmaps/heatmap_raw_results/**
 clam/heatmaps/heatmap_production_results/**
 clam/heatmaps/results/**
+project/**
