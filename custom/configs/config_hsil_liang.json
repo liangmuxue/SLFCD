@@ -1,9 +1,9 @@
 {
-  "mode": "hsil",
-  "model": "resnet50",
+  "mode": "single",
+  "model": "cbam",
   "batch_size": 8,
   "image_size": 512,
-  "patch_level": 0,
+  "patch_level": 1,
   "crop_size": 224,
   "normalize": "True",
   "lr": 1e-4,
@@ -11,15 +11,15 @@
   "data_path": "/home/liang/dataset/wsi/hsil",
   "train_csv": "train.csv",
   "valid_csv": "valid.csv",
-  "tumor_mask_path": "tumor_mask_level0",
-  "patch_path": "patches_level0",
+  "tumor_mask_path": "tumor_mask_level1",
+  "patch_path": "patches_level1",
   "data_path_train": "/home/liang/dataset/wsi/lsil/patches/train",
   "data_path_valid": "/home/liang/dataset/wsi/lsil/patches/valid",
   "epochs": 100,
   "log_every": 5,
   "num_workers": 6,
   "load_weight": false,
-  "model_name" : "hsil_det_parclass",
+  "model_name" : "hsil_cbam_singleclass",
   "work_dir": "results"
 }
 

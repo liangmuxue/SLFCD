@@ -1,5 +1,6 @@
 import numpy as np
 import cv2
+from shapely.geometry import Polygon
 
 def rect_overlap(rect1,rect2):
     """取得2个矩形的重叠区域
@@ -27,3 +28,9 @@ def rect_overlap(rect1,rect2):
     # 相交的区域面积
     area = width * height        
     return (X1,Y1,X2,Y2,area)
+
+def rect_contain(rectA,rectB):
+    """判断2个矩形是否存在包含关系,矩形区域格式为xyxy"""
+    
+    pass
+

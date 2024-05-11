@@ -100,24 +100,6 @@ class CoolSystem(pl.LightningModule):
         """training"""
         
         img,annot,items = batch
-        show_time_n = 0
-        show_time_t = 0
-        for i in range(len(items)):
-            item = items[i]["item"]
-            patch_type = item["type"]            
-            img_show = img[i].cpu().numpy().transpose(1,2,0)
-            win = "win_{}".format(i)
-            title = "{}_{}".format(item["name"],item["coord"])            
-            if patch_type=="tumor":
-                if show_time_t>3:
-                    continue
-                visdom_data(img_show, [], viz=viz_tumor_train,win=win,title=title) 
-                show_time_t += 1
-            else:
-                if show_time_n>3:
-                    continue                
-                visdom_data(img_show, [], viz=viz_normal_train,win=win,title=title)   
-                show_time_n += 1 
         img = img.to(device).float()
         annot = annot.to(device).float()
         
@@ -409,6 +391,25 @@ def data_summarize(dataloader):
     
     print("label_stat 1:{},2:{},3:{}".format(np.sum(label_stat==1),np.sum(label_stat==2),np.sum(label_stat==3)))
 
+def vis_item(items,img):
+    show_time_n = 0
+    show_time_t = 0    
+    for i in range(len(items)):
+        item = items[i]["item"]
+        patch_type = item["type"]            
+        img_show = img[i].cpu().numpy().transpose(1,2,0)
+        win = "win_{}".format(i)
+        title = "{}_{}".format(item["name"],item["coord"])            
+        if patch_type=="tumor":
+            if show_time_t>3:
+                continue
+            visdom_data(img_show, [], viz=viz_tumor_train,win=win,title=title) 
+            show_time_t += 1
+        else:
+            if show_time_n>3:
+                continue                
+            visdom_data(img_show, [], viz=viz_normal_train,win=win,title=title)   
+            show_time_n += 1     
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Train model')
     parser.add_argument('--device_ids', default='0', type=str, help='choose device')

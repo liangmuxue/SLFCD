@@ -52,6 +52,7 @@ class Whole_Slide_Bag_COMBINE(Dataset):
 		patch_level=0,
 		patch_size=256,
 		mode="lsil",
+		transform=None,
 		work_type="train",
 		):
 		"""
@@ -67,128 +68,110 @@ class Whole_Slide_Bag_COMBINE(Dataset):
 		self.file_path = file_path
 		self.wsi_path = wsi_path
 		self.mask_path = mask_path
-
+		self.transform = transform
+		
 		wsi_data = {}
 		patches_bag_list = []
-		patches_tumor_patch_file_list = []
-		pathces_normal_len = 0
-		pathces_tumor_len = 0
-		file_names = []
-		
+		pathces_len = 0
+		labels = []
 		# 处理非标注数据，遍历所有h5数据，存储相关坐标
 		for svs_file in split_data:
 			single_name = svs_file.split(".")[0]
-			file_names.append(single_name)
 			patch_file = os.path.join(file_path, patch_path, single_name + ".h5")	
 			wsi_file = os.path.join(file_path, "data", svs_file)	
-			wsi_data[single_name] = openslide.open_slide(wsi_file)
-			scale = wsi_data[single_name].level_downsamples[patch_level]
+			wsi_data = openslide.open_slide(wsi_file)
+			scale = wsi_data.level_downsamples[patch_level]
 			with h5py.File(patch_file, "r") as f:
-				ignore_file = os.path.basename(patch_file)
-				try:
-					self.patch_coords = np.array(f['coords'])
-				except Exception as e:
-					print("file load fail:{}".format(patch_file))
-					continue
-				patch_level = f['coords'].attrs['patch_level']
-				patch_size = f['coords'].attrs['patch_size']
+				single_name = os.path.basename(patch_file).split(".")[0]
+				patch_coords = np.array(f['coords'])
+				# 存储标注框信息，形状为: (patch数量,最大长度,3)
+				annotations = np.array(f["annotations"]) 
+				label_data = np.array(f["label_data"]) 
+				# 对应每个patch，包含的标注框实际数量
+				boxes_len = np.array(f["boxes_len"]) 
 				
-				# sum data length
-				pathces_normal_len += len(f['coords'])
+				# 累计总记录数
+				pathces_len += boxes_len.sum()
 				if target_patch_size > 0:
 					# 如果目标分片尺寸大于0，需要对应处理，一般用不到
 					target_patch_size = (target_patch_size,) * 2
 				elif custom_downsample > 1:
 					target_patch_size = (patch_size // custom_downsample,) * 2
 
+				has_anno_flag = np.zeros(patch_coords.shape[0])
 				# 对每个patch坐标进行处理，包括设置缩放等
-				for coord in f['coords']:
-					patches_bag = {"name":single_name, "scale":scale, "type":"normal"}		
-					patches_bag["coord"] = np.array(coord) / scale
-					patches_bag["coord"] = patches_bag["coord"].astype(np.int16)
-					patches_bag["patch_level"] = patch_level
-					patches_bag["label"] = 0
-					patches_bag_list.append(patches_bag)
-					
-		# 处理标注数据
-		for label in get_tumor_label_cate(mode=mode):
-			patch_img_path = None
-			# Data augmentation
-			if work_type == "train":
-				if label == 4 or label == 5:
-					patch_img_path = os.path.join(file_path, "tumor_patch_img", str(label), "origin")
-				elif label == 6:
-					patch_img_path = os.path.join(file_path, "tumor_patch_img", str(label), "origin")
-				elif label == 1 or label ==  2 or label ==  3:
-					patch_img_path = os.path.join(file_path, "tumor_patch_img", str(label), "origin")
-			else:
-				patch_img_path = os.path.join(file_path, "tumor_patch_img", str(label), "origin")
-			file_list = os.listdir(patch_img_path)
-			for file in file_list:
-				img_file_name = file.split(".")[0]
-				match_svs_file_name = img_file_name.rsplit("_",1)[0]
-				# 检查当前标注的图片文件是否属于此分割数据集合中的
-				if not match_svs_file_name in file_names:
-					continue
-				tumor_file_path = os.path.join(patch_img_path, file)
-				patches_tumor_patch_file_list.append(tumor_file_path)
-				pathces_tumor_len += 1
-		
+				for i in range(patch_coords.shape[0]):
+					# 根据patch对应label数据，设置类别
+					single_label = label_data[i]
+					coord = patch_coords[i]
+					if single_label>0:
+						patches_type = "tumor"
+						# 设置当前切片是否包含标注
+						has_anno_flag[i] = 1
+					else:
+						patches_type = "normal"
+						# 如果当前属于未标注，则加入数据集合
+						patches_bag = {"type":patches_type,"label":0,"scale":scale,"name":single_name,
+									"patch_level":patch_level,"coord":(np.array(coord)/scale).astype(np.int16)}		
+						patches_bag["anno_coord"] = patches_bag["coord"]
+						labels.append(0)
+						patches_bag_list.append(patches_bag)
+					# 遍历当前patch下的所有标注候选框，展开为对应记录
+					box_len = boxes_len[i] 		
+					for j in range(box_len):	
+						patches_bag = {"type":patches_type}		
+						box = annotations[i,j]
+						# 标签代码转为标签序号
+						patches_bag["label"] = get_label_cate_num(box[-1],mode=mode)
+						patches_bag["scale"] = scale
+						patches_bag["name"] = single_name
+						patches_bag["coord"] = (np.array(coord)/scale).astype(np.int16)
+						patches_bag["patch_level"] = patch_level
+						# 实际坐标
+						patches_bag["anno_coord"] = box[:-1].astype(np.int16)
+						patches_bag_list.append(patches_bag)
+						labels.append(patches_bag["label"])
+
+		labels = np.array(labels)
+		no_anno_index = np.where(labels==0)[0]
+		has_anno_index = np.where(labels>0)[0] 
+		# 削减非标注样本数量，以达到数据规模平衡
 		if work_type=="train":
-			# 削减非标注样本数量，以达到数据规模平衡
-			target_pathces_normal_len = pathces_tumor_len * 5
-			target_pathces_normal_idx = np.random.randint(0,pathces_normal_len-1,(target_pathces_normal_len,))
-			self.patches_bag_list = np.array(patches_bag_list)[target_pathces_normal_idx].tolist()
-			self.pathces_normal_len = target_pathces_normal_len	
+			rate = 2
 		else:
-			target_pathces_normal_len = pathces_tumor_len * 10
-			target_pathces_normal_idx = np.random.randint(0,pathces_normal_len-1,(target_pathces_normal_len,))
-			self.patches_bag_list = np.array(patches_bag_list)[target_pathces_normal_idx].tolist()
-			self.pathces_normal_len = target_pathces_normal_len	
-		
-		self.pathces_normal_len = target_pathces_normal_len					
-		self.patches_tumor_patch_file_list = patches_tumor_patch_file_list
-		self.pathces_tumor_len = pathces_tumor_len
-				
-		self.pathces_total_len = pathces_tumor_len + target_pathces_normal_len
-		self.roi_transforms = eval_transforms()
-		self.target_patch_size = target_patch_size
+			rate = 2
+		# 削减未标注区域数量，和已标注区域数量保持一致比例
+		patches_bag_list = np.array(patches_bag_list)
+		keep_no_anno_num = rate * has_anno_index.shape[0]
+		if keep_no_anno_num<no_anno_index.shape[0]:
+			target_pathces_idx = np.random.randint(0,no_anno_index.shape[0]-1,(keep_no_anno_num,))
+			no_anno_bag_list = patches_bag_list[target_pathces_idx].tolist()
+			self.patches_bag_list = patches_bag_list[has_anno_index].tolist() + no_anno_bag_list
+		else:
+			self.patches_bag_list = patches_bag_list.tolist()
+		self.pathces_total_len = len(self.patches_bag_list)
 		
 	def __len__(self):
 		return self.pathces_total_len
 
 	def __getitem__(self, idx):
 		
-		# Judge type by index value
-		if idx >= self.pathces_normal_len:
-			# print("mask_tumor_size is:{},coord:{}".format(mask_tumor_size,coord))
-			file_path = self.patches_tumor_patch_file_list[idx - self.pathces_normal_len]
-			# 通过文件名中的标志，取得对应标签代码
-			t = file_path.split("/")
-			try:
-				label = int(t[-3])
-				# 标签代码转为标签序号
-				label = get_label_cate_num(label)
-			except Exception as e:
-				print("sp err:{}".format(t))
-			img_ori = cv2.imread(file_path)
-			item = {}
+		item = self.patches_bag_list[idx]
+		name = item["name"]
+		coord = item["anno_coord"]
+		scale = item["scale"]
+		# 读取wsi文件并生成图像数据
+		wsi_file = os.path.join(self.file_path, "data", name + ".svs")	
+		wsi = openslide.open_slide(wsi_file)			
+		coord = (coord * scale).astype(np.int16)			
+		img = wsi.read_region(coord, self.patch_level, (self.patch_size, self.patch_size)).convert('RGB')
+		img = cv2.cvtColor(np.array(img), cv2.COLOR_RGB2BGR)	
+		if self.transform is not None:
+			img_tar = self.transform(img)
 		else:
-			item = self.patches_bag_list[idx]
-			name = item['name']
-			scale = item['scale']
-			coord = item['coord']
-			wsi_file = os.path.join(self.file_path, "data", name + ".svs")	
-			wsi = openslide.open_slide(wsi_file)			
-			# read image from wsi with coordination 
-			coord_ori = (coord * scale).astype(np.int16)			
-			img_ori = wsi.read_region(coord_ori, self.patch_level, (self.patch_size, self.patch_size)).convert('RGB')
-			img_ori = cv2.cvtColor(np.array(img_ori), cv2.COLOR_RGB2BGR)	
-			label = 0
-		if self.target_patch_size > 0:
-			img_ori = img_ori.resize(self.target_patch_size)
-		img = self.roi_transforms(img_ori)
-		return img, label, img_ori, item
+			img_tar = img
+		# 返回数据包括图像数据以及标签等
+		return img_tar, item["label"], item,img
 		
 class Whole_Slide_Det(Whole_Slide_Bag_COMBINE):
 	"""针对目标检测模式的WSI数据集"""

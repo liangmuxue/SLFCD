@@ -7,32 +7,31 @@ import json
 import time
 from argparse import Namespace
 import pandas as pd
-import torch
 from torch.utils.data import DataLoader
 from torch.autograd import Variable
 from torch.nn import BCEWithLogitsLoss, DataParallel
 from torch.optim import SGD
 from torchvision import models
 from torch import nn
+import torchvision.transforms as transforms
 from tensorboardX import SummaryWriter
+import cv2
 
 import torch
-import torch.nn as nn
-import torchvision
-import torchvision.transforms as transforms
 import torch.nn.functional as F
-import matplotlib.pyplot as plt
 import pytorch_lightning as pl
 from pytorch_lightning import loggers as pl_loggers
-from pytorch_lightning import Trainer
 from pytorch_lightning.callbacks import ModelCheckpoint
 from pytorch_lightning.trainer.states import RunningStage
 import numpy as np
+
+
 from clam.datasets.dataset_h5 import Dataset_All_Bags
 from clam.datasets.dataset_combine import Whole_Slide_Bag_COMBINE,Whole_Slide_Det
 from clam.utils.utils import print_network, collate_features
 from camelyon16.data.image_producer import ImageDataset
 from utils.constance import get_label_cate,get_label_cate_num
+from custom.model.cbam_ext import ResidualNet
 
 sys.path.append(os.path.dirname(os.path.abspath(__file__)) + '/../../')
 
@@ -47,13 +46,17 @@ viz_tumor_valid = Visdom(env="tumor_valid", port=8098)
 viz_normal_train = Visdom(env="normal_train", port=8098)
 viz_normal_valid = Visdom(env="normal_valid", port=8098)
 
-def chose_model(model_name):
+
+def chose_model(model_name,mode=None,image_size=512):
+    num_classes =  2 # len(get_label_cate(mode=mode))
     if model_name == 'resnet18':
         model = models.resnet18(pretrained=False)
     elif model_name == 'resnet50':
         model = models.resnet50(pretrained=False)         
     elif model_name == 'resnet152':
-        model = models.resnet152(pretrained=False)        
+        model = models.resnet152(pretrained=False)       
+    elif model_name == 'cbam': 
+        model = ResidualNet("ImageNet", 50, num_classes, "cbam",image_size=image_size) 
     else:
         raise Exception("I have not add any models. ")
     return model
@@ -66,13 +69,12 @@ class CoolSystem(pl.LightningModule):
         self.params = hparams
             
         ########## define the model ########## 
-        model = chose_model(hparams.model)
+        model = chose_model(hparams.model,hparams.mode,image_size=hparams.image_size)
         model = model.to(device)
-        fc_features = model.fc.in_features
-        model.fc = nn.Linear(fc_features, len(get_label_cate(mode=hparams.mode)))        
-        self.model = model.to(device)
-        self.loss_fn = nn.CrossEntropyLoss().to(device)
-        self.loss_fn.requires_grad_(True)
+        # fc_features = model.fc.in_features
+        # model.fc = nn.Linear(fc_features, len(get_label_cate(mode=hparams.mode)))  
+        self.model = model
+        self.loss_fn = nn.CrossEntropyLoss().to(device)        
         self.save_hyperparameters()
         
         self.resuts = None
@@ -91,15 +93,15 @@ class CoolSystem(pl.LightningModule):
             ],  weight_decay=1e-4,lr=self.params.lr,capturable=True)
         # optimizer.param_groups[0]['capturable'] = True
         scheduler = torch.optim.lr_scheduler.StepLR(optimizer=optimizer,gamma=0.3, step_size=5)
-        # scheduler = torch.optim.lr_scheduler.CyclicLR(optimizer=optimizer,base_lr=1e-4,max_lr=1e-3,step_size_up=30)
-        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer=optimizer,T_max=16,eta_min=1e-4)
+        # scheduler = torch.optim.lr_scheduler.CyclicLR(optimizer=optimizer,cycle_momentum=False,base_lr=1e-5,max_lr=1.5e-4,step_size_up=30)
+        # scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer=optimizer,T_max=16,eta_min=1e-4)
 
         return [optimizer], [scheduler]
 
     def training_step(self, batch, batch_idx):
         """training"""
         
-        x, y,img_ori,_ = batch
+        x, y,item,img_ori = batch
         x = x.to(device)
         y = y.to(device)
         self.model = self.model.to(device)
@@ -116,29 +118,21 @@ class CoolSystem(pl.LightningModule):
         self.log("lr",self.trainer.optimizers[0].param_groups[0]["lr"], batch_size=batch[0].shape[0], prog_bar=True)
         
         # Sample Viz
-        # tumor_index = torch.where(y>0)[0]
-        # for index in tumor_index:
-        #     if np.random.randint(1,10)==3:
-        #         ran_idx = np.random.randint(1,10)
-        #         win = "win_{}".format(ran_idx)
-        #         label = y[index]
-        #         sample_img = img_ori[index]
-        #         title = "label{}_{}".format(label,ran_idx)
-        #         visdom_data(sample_img, [], viz=viz_tumor_train,win=win,title=title) 
-        # normal_index = torch.where(y==0)[0]    
-        # for index in normal_index:
-        #     if np.random.randint(1,50)==3:
-        #         ran_idx = np.random.randint(1,10)
-        #         win = "win_{}".format(ran_idx)
-        #         label = y[index]
-        #         sample_img = img_ori[index]
-        #         title = "label{}_{}".format(label,ran_idx)
-        #         visdom_data(sample_img, [], viz=viz_normal_train,win=win,title=title)                     
+        all_labes = get_label_cate(mode=self.params.mode)
+        tumor_index = torch.where(y>0)[0]
+        for index in tumor_index:
+            if np.random.randint(1,50)==3:
+                self._viz_sample(img_ori, y, index, all_labes=all_labes,viz=viz_tumor_train)
+                
+        normal_index = torch.where(y==0)[0]    
+        for index in normal_index:
+            if np.random.randint(1,50)==3:
+                self._viz_sample(img_ori, y, index, all_labes=all_labes,viz=viz_normal_train)                    
         return {'loss': loss, 'train_acc': acc}
 
     def validation_step(self, batch, batch_idx):
         # OPTIONAL
-        x, y,img_ori,_ = batch
+        x, y,item,img_ori = batch
         x = x.to(device)
         y = y.to(device)
         self.model = self.model.to(device)
@@ -165,22 +159,13 @@ class CoolSystem(pl.LightningModule):
         tumor_index = torch.where(y>0)[0]
         
         for index in tumor_index:
-            if np.random.randint(1,10)==3:
-                ran_idx = np.random.randint(1,10)
-                win = "win_{}".format(ran_idx)
-                label = y[index]
-                sample_img = img_ori[index]
-                title = "label{}_{}".format(label,ran_idx)
-                visdom_data(sample_img, [], viz=viz_tumor_valid,win=win,title=title) 
+            if np.random.randint(1,50)==3:
+                self._viz_sample(img_ori, y, index, all_labes=all_labes,viz=viz_tumor_valid)
+                
         normal_index = torch.where(y==0)[0]    
         for index in normal_index:
             if np.random.randint(1,50)==3:
-                ran_idx = np.random.randint(1,10)
-                win = "win_{}".format(ran_idx)
-                label = y[index]
-                sample_img = img_ori[index]
-                title = "label{}_{}".format(label,ran_idx)
-                visdom_data(sample_img, [], viz=viz_normal_valid,win=win,title=title)      
+                self._viz_sample(img_ori, y, index, all_labes=all_labes,viz=viz_normal_valid)    
                      
         results = np.array(results)
                 
@@ -194,6 +179,16 @@ class CoolSystem(pl.LightningModule):
 
         return {'val_loss': loss, 'val_acc': acc}
 
+    def _viz_sample(self,x,y,index,all_labes=None,viz=None):
+        ran_idx = np.random.randint(1,5)
+        win = "win_{}".format(ran_idx)
+        label = y[index]
+        sample_img = x[index]
+        sample_img_shw = sample_img
+        # sample_img_shw = cv2.resize(sample_img_shw,(64,64))
+        title = "label{}_{}".format(label,ran_idx)    
+        visdom_data(sample_img_shw, [], viz=viz,win=win,title=title)    
+        
     def on_validation_epoch_start(self):
         self.results = None
         
@@ -210,9 +205,9 @@ class CoolSystem(pl.LightningModule):
             acc_cnt = results_pd[results_pd["label"]==label]["acc_cnt"].sum()
             fail_cnt = results_pd[results_pd["label"]==label]["fail_cnt"].sum()
             real_cnt = results_pd[results_pd["label"]==label]["real_cnt"].sum()
-            self.log('acc_cnt_{}'.format(label), float(acc_cnt), prog_bar=True)
-            self.log('fail_cnt_{}'.format(label), float(fail_cnt), prog_bar=True)
-            self.log('real_cnt_{}'.format(label), float(real_cnt), prog_bar=True)
+            # self.log('acc_cnt_{}'.format(label), float(acc_cnt), prog_bar=True)
+            # self.log('fail_cnt_{}'.format(label), float(fail_cnt), prog_bar=True)
+            # self.log('real_cnt_{}'.format(label), float(real_cnt), prog_bar=True)
             if acc_cnt+fail_cnt==0:
                 acc = 0.0
             else:
@@ -232,7 +227,16 @@ class CoolSystem(pl.LightningModule):
         split_data = pd.read_csv(csv_path).values[:,0].tolist()
         wsi_path = os.path.join(file_path,"data")
         mask_path = os.path.join(file_path,tumor_mask_path)
-        dataset_train = Whole_Slide_Bag_COMBINE(file_path,wsi_path,mask_path,work_type="train",mode=hparams.mode,patch_path=hparams.patch_path,
+        # Data Aug
+        normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406],
+                                     std=[0.229, 0.224, 0.225])        
+        trans = transforms.Compose([
+                    transforms.ToTensor(),
+                    transforms.RandomResizedCrop(size=224, scale=(0.5, 0.8), ratio=(1, 5)),
+                    transforms.RandomHorizontalFlip(),
+                    # normalize,
+                ])        
+        dataset_train = Whole_Slide_Bag_COMBINE(file_path,wsi_path,mask_path,work_type="train",mode=hparams.mode,patch_path=hparams.patch_path,transform=trans,
                                                 patch_size=hparams.image_size,split_data=split_data,patch_level=hparams.patch_level)
         train_loader = DataLoader(dataset_train,
                                       batch_size=self.params.batch_size,
@@ -250,7 +254,15 @@ class CoolSystem(pl.LightningModule):
         split_data = pd.read_csv(csv_path).values[:,0].tolist()
         wsi_path = os.path.join(file_path,"data")
         mask_path = os.path.join(file_path,tumor_mask_path)
-        dataset_valid = Whole_Slide_Bag_COMBINE(file_path,wsi_path,mask_path,work_type="valid",mode=hparams.mode,patch_path=hparams.patch_path,
+        
+        normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406],
+                                     std=[0.229, 0.224, 0.225])            
+        trans = transforms.Compose([
+                    transforms.ToTensor(),
+                    transforms.CenterCrop(224),
+                    # normalize,
+                ])          
+        dataset_valid = Whole_Slide_Bag_COMBINE(file_path,wsi_path,mask_path,work_type="valid",mode=hparams.mode,patch_path=hparams.patch_path,transform=trans,
                                                 patch_size=hparams.image_size,split_data=split_data,patch_level=hparams.patch_level)
         val_loader = DataLoader(dataset_valid,
                                       batch_size=self.params.batch_size,
@@ -366,12 +378,16 @@ def data_summarize(dataloader):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Train model')
     parser.add_argument('--device_ids', default='0', type=str, help='choose device')
+    parser.add_argument('--mode', default='lsil', type=str, help='choose type')
     args = parser.parse_args()
     device_ids = args.device_ids
       
     # cnn_path = 'custom/configs/config_lsil.json'
     # cnn_path = 'custom/configs/config_hsil.json'
-    cnn_path = 'custom/configs/config_lsil_liang.json'
+    if args.mode=="hsil":
+        cnn_path = 'custom/configs/config_hsil_liang.json'
+    if args.mode=="lsil":
+        cnn_path = 'custom/configs/config_lsil_liang.json'        
     with open(cnn_path, 'r') as f:
         args = json.load(f) 
     hyperparams = Namespace(**args)    

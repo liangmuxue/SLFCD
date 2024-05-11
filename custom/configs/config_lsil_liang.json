@@ -1,8 +1,8 @@
 {
-  "mode": "lsil",
-  "model": "resnet50",
-  "batch_size": 8,
-  "image_size": 512,
+  "mode": "single",
+  "model": "cbam",
+  "batch_size": 32,
+  "image_size": 128,
   "patch_level": 0,
   "crop_size": 224,
   "normalize": "True",
@@ -17,8 +17,8 @@
   "data_path_valid": "/home/liang/dataset/wsi/lsil/patches/valid",
   "epochs": 100,
   "log_every": 5,
-  "num_workers": 0,
+  "num_workers": 6,
   "load_weight": false,
-  "model_name" : "lsil_det_parclass",
+  "model_name" : "lsil_cbam_steplr",
   "work_dir": "results"
 }

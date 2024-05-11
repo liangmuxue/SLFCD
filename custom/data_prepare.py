@@ -8,12 +8,14 @@ import json
 import openslide
 import cv2
 import h5py
+import time
+from joblib import Parallel, delayed
+
 from utils.constance import get_label_with_group_code,get_combine_label_with_type,get_tumor_label_cate
 from utils.wsi_img_viz import viz_crop_patch
-from utils.cv_utils import rect_overlap
-
+from utils.cv_utils import rect_overlap,rect_contain
+from custom.tumor_mask import get_mask_tumor
 from visdom import Visdom
-from pickle import FALSE
 # from clam.extract_features_fp import wsi
 # viz_debug = Visdom(env="debug", port=8098)
 
@@ -285,57 +287,140 @@ def patch_anno_img(xywh,patch_size=256,mask_threhold=0.9,mask_data=None,scale=4,
     return patch_regions
 
     
-def build_annotation_patches(file_path,level=1,patch_size=64,mask_threhold=0.5):
-    """Load and build positive annotation data"""
+def build_annotation_patches(file_path,level=1,patch_size=64,patch_slide_size=16,data_type=None,mask_threhold=0.5):
+    """根据标注生成切片，针对图像识别模式"""
+    
+    xml_path = file_path + "/xml"
+    # 为每个patch创建一组滑动窗
+    def create_slide_windows(coord,patch_size,slide_time):
+        # slide_window_patches = np.zeros((slide_time,slide_time,2))
+        rows = np.linspace(coord[0],coord[0]+patch_size,num=slide_time)
+        cols = np.linspace(coord[1],coord[1]+patch_size,num=slide_time)
+        # 使用广播功能，以及水平拼接，生成二维数组
+        xx, yy = np.meshgrid(rows, cols)
+        slide_window_patches = np.hstack((xx.reshape(-1, 1), yy.reshape(-1, 1)))
+        slide_window_patches = slide_window_patches.reshape(slide_time,slide_time,2)
+        return slide_window_patches
+    
+    # for xml_file in os.listdir(xml_path):
+    #     build_annotation_patches_single(file_path,xml_file,level=level,patch_size=patch_size,
+    #             patch_slide_size=patch_slide_size,data_type=data_type,mask_threhold=mask_threhold)
+    Parallel(n_jobs=8)(delayed(build_annotation_patches_single)(file_path,xml_file,level=level,patch_size=patch_size,
+            patch_slide_size=patch_slide_size,data_type=data_type,mask_threhold=mask_threhold) for xml_file in os.listdir(xml_path))
+            
+def build_annotation_patches_single(file_path,xml_file,level=1,patch_size=64,patch_slide_size=16,data_type=None,mask_threhold=0.5):
     
     patch_path = file_path + "/patches_level{}".format(level)
     wsi_path = file_path + "/data"
-    xml_path = file_path + "/xml"
-    for xml_file in os.listdir(xml_path):
-        file_name = xml_file.split(".")[0]
-        patch_file = os.path.join(patch_path,"{}.h5".format(file_name))
-        # if file_name!="80-CG23_15274_01":
-        #     continue
-        patch_file_path = os.path.join(patch_path,patch_file)
-        wsi_file_path = os.path.join(wsi_path,file_name+".svs")
-        wsi = openslide.open_slide(wsi_file_path)
-        scale = wsi.level_downsamples[level]
-        mask_path = os.path.join(file_path,"tumor_mask_level{}".format(level))
-        npy_file = os.path.join(mask_path,file_name+".npy") 
-        mask_data = np.load(npy_file)
-        with h5py.File(patch_file_path, "a") as f:
-            print("crop_region for:{}".format(patch_file_path))
-            crop_region = f['crop_region'][:]
-            label_data = f['crop_region'].attrs['label_data'] 
-            patches = []
-            patches_length = 0
-            db_keys = []
-            # 遍历每个剪裁区域
-            for i in range(crop_region.shape[0]):
-                region = crop_region[i]
-                label = label_data[i]
-                # Patch for every annotation images,Build patches coordinate data list 
-                patch_data = patch_anno_img(region,mask_data=mask_data,patch_size=patch_size,mask_threhold=mask_threhold,scale=scale,
-                                            file_path=file_path,file_name=file_name,label=label,index=i,level=level,wsi=wsi)   
-                if patch_data is None:
-                    # viz_crop_patch(file_path,file_name,region,None)                    
-                    patch_data = np.array([])
-                patches_length += patch_data.shape[0]
-                db_key = "anno_patches_data_{}".format(i)
-                if db_key in f:
-                    del f[db_key]
-                f.create_dataset(db_key, data=patch_data)
-                db_keys.append(db_key)
-            if "annotations" in f:
-                del f["annotations"]
-            # annotation summarize
-            f.create_dataset("annotations", data=db_keys)    
-            # Record total length and label
-            f["annotations"].attrs['patches_length'] = patches_length      
-            f["annotations"].attrs['label_data'] = label_data        
-            print("patch {} ok".format(file_name))
+    # 每个patch的滑动次数
+    slide_time = patch_size//patch_slide_size  
+    file_name = xml_file.split(".")[0]
+    patch_file = os.path.join(patch_path,"{}.h5".format(file_name))
+    # if file_name!="80-CG23_15274_01":
+    #     continue
+    patch_file_path = os.path.join(patch_path,patch_file)
+    wsi_file_path = os.path.join(wsi_path,file_name+".svs")
+    json_file_path = os.path.join(file_path,"json",file_name+".json")
+    wsi = openslide.open_slide(wsi_file_path)
+    scale = wsi.level_downsamples[level]
 
+    with h5py.File(patch_file_path, "a") as f:
+        try:
+            coords = np.array(f['coords'])
+        except Exception as e:
+            print("coords data None:{}".format(patch_file_path))
+            return
+        label_data = np.zeros((coords.shape[0]))
+        anno_data = []
+        tumor_mask = get_mask_tumor(wsi_file_path,json_file_path,level=level)
+        anno_regions = get_anno_box_datas(json_file_path,scale=scale)
+        anno_region_items = np.array([item["region"]+[item["code"]] for item in anno_regions])
+        # # 生成矩形候选框
+        # anno_regions = get_anno_box_datas(json_file_path,scale=scale)
+        max_box_len = 0
+        start = time.time()
+        # 遍历每个剪裁区域，取得对应标注区域
+        for i in range(coords.shape[0]):
+            anno_patches = []
+            coord = coords[i]
+            has_anno_flag = False
+            # 使用滑动窗方式，对patch以及周边进行候选扫描
+            # slide_window_patches = create_slide_windows(coord,patch_size,slide_time)
+            for k in range(slide_time):
+                for j in range(slide_time):
+                    # 判断当前窗口与标注的匹配度
+                    coord_cur = [coord[0]+k*patch_slide_size,coord[1]+j*patch_slide_size]
+                    match_flag,label = judge_region_match(coord_cur,patch_size,tumor_mask,anno_regions=anno_region_items,mask_threhold=mask_threhold)
+                    # 如果匹配，记录匹配的坐标点
+                    if match_flag:
+                        # 追加对应区域的标签信息
+                        anno_patches.append(coord_cur+[label])
+                        has_anno_flag = True
+            # print("loop cont:{}".format(i))
+            # 计算取得当前文件对应的标注框最大值，用于后续数据补充对齐
+            box_len = len(anno_patches)
+            max_box_len=box_len if max_box_len<box_len else max_box_len
+            # 标记此切片是否包含标注
+            if has_anno_flag:   
+                label_data[i] = 1
+            anno_data.append(anno_patches)
+        boxes_len = []  
+        print("loop time:{}".format((time.time()-start)*1000))
+        # 再次拼接为一个完整的数组,按照最大标注框数量构建数组
+        bboxes_data_arr = np.zeros((coords.shape[0],max_box_len,3))
+        start = time.time()
+        labels = None
+        for i in range(coords.shape[0]):
+            # 记录patch中的标注框数量
+            boxes_len.append(len(anno_data[i]))
+            if len(anno_data[i])>0:
+                bboxes_data_arr[i,:len(anno_data[i]),:] = np.array(anno_data[i])
+                labels_item = np.array([item[-1] for item in anno_data[i]])
+                if labels is None:
+                    labels = labels_item
+                else:
+                    labels = np.concatenate((labels,labels_item))
+        print("bboxes_data_arr time:{}".format((time.time()-start)*1000))
+        
+        # 从新创建标注数据集
+        if "annotations" in f:
+            del f["annotations"]            
+        if "label_data" in f:
+            del f["label_data"]          
+        if "boxes_len" in f:
+            del f["boxes_len"]             
+        # 标注数据，以及相关信息  
+        f.create_dataset("annotations", data=bboxes_data_arr)    
+        f.create_dataset("label_data", data=label_data)   
+        f.create_dataset("boxes_len", data=boxes_len)  
+        print("patch {} ok".format(file_name))
+        
+def judge_region_match(coord_cur,patch_size,tumor_mask,anno_regions=None,mask_threhold=0.5):
+    """判断指定区域是否包含标注"""
+    
+    flag = False
+    label = 0
+   
+    patch_masked = tumor_mask[coord_cur[1]:coord_cur[1]+patch_size,coord_cur[0]:coord_cur[0]+patch_size]
+    # 如果标注面积占比超过了当前区域的一定比例，则属于包含标注
+    if (np.sum(patch_masked>0)/(patch_size*patch_size))>mask_threhold:
+        u, c = np.unique(patch_masked[patch_masked>0], return_counts = True)
+        label = u[c == c.max()]        
+        return True,label[0]
+    
+    if len(anno_regions.shape)<2:
+        return False,0
+    # 如果区域中包含完整的标注，也入选
+    patch_area = [coord_cur[0],coord_cur[1],coord_cur[0]+patch_size,coord_cur[1]+patch_size]
+    match_idx = np.where((anno_regions[:,0]>patch_area[0]) 
+                         & (anno_regions[:,1]>patch_area[1])
+                         & (anno_regions[:,2]<patch_area[2])
+                         & (anno_regions[:,3]<patch_area[3]))[0]
+    if match_idx.shape[0]>0:
+        return True,anno_regions[match_idx[0]][-1]
 
+    return False,0
+    
 def build_annotation_patches_det(file_path,level=1,patch_size=64,mask_threhold=0.2,data_type=None):
     """根据标注生成切片，针对目标检测模式"""
     
@@ -647,6 +732,7 @@ if __name__ == '__main__':
     parser.add_argument('--data_type',default='lsil', type=str,help='数据类别：hsil lsil ais')
     parser.add_argument('--level', default=1, type=int, help='at which WSI level to obtain the mask, default 1')    
     parser.add_argument('--patch_size', default=64, type=int, help='切片尺寸，默认64*64')
+    parser.add_argument('--patch_slide_size', default=64, type=int, help='滑动窗距离')
     
     args = parser.parse_args()
     
@@ -655,11 +741,12 @@ if __name__ == '__main__':
     
     # align_xml_svs(file_path)
     # build_data_csv(file_path,is_normal=is_normal)
-    # crop_with_annotation(file_path,level=args.level)
+    crop_with_annotation(file_path,level=args.level)
     # 识别模式
-    # build_annotation_patches(file_path,mask_threhold=0.5,level=args.level,patch_size=args.patch_size)
+    build_annotation_patches(file_path,mask_threhold=0.5,level=args.level,data_type=args.data_type,
+                             patch_size=args.patch_size,patch_slide_size=args.patch_slide_size)
     # 目标检测模式
-    build_annotation_patches_det(file_path,mask_threhold=0.005,level=args.level,patch_size=args.patch_size,data_type=args.data_type)
+    # build_annotation_patches_det(file_path,mask_threhold=0.005,level=args.level,patch_size=args.patch_size,data_type=args.data_type)
     # aug_annotation_patches(file_path,'lsil',33)
     # filter_patches_exclude_anno(file_path,level=args.level)
     
