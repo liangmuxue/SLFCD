@@ -13,7 +13,7 @@ from torch.utils.data import Dataset
 import h5py
 
 from clam.utils.utils import generate_split, nth
-from utils.constance import get_combine_label_with_type,get_combine_label_dict
+from utils.constance import get_combine_label_dict
 
 def save_splits(split_datasets, column_keys, filename, boolean_style=False):
 	splits = [split_datasets[i].slide_data['slide_id'] for i in range(len(split_datasets))]
@@ -379,14 +379,15 @@ class Combine_MIL_Dataset(Generic_WSI_Classification_Dataset):
 		print_info = True,
 		patient_strat=False,
 		label_col = None,
-		patient_voting = 'max',		
+		patient_voting = 'max',	
+		type='hsil',	
 		**kwargs):
 	
 		self.data_dir = data_dir
 		self.use_h5 = False
-		
+		self.type = type
 		self.shuffle = shuffle
-		self.label_dict =  get_combine_label_dict()
+		self.label_dict =  get_combine_label_dict(mode=type)
 		self.num_classes = len(set(self.label_dict.values()))
 		self.seed = seed
 		self.print_info = print_info
@@ -427,7 +428,7 @@ class Combine_MIL_Dataset(Generic_WSI_Classification_Dataset):
 		if not self.use_h5:
 			full_path = os.path.join(features_path, 'pt_files', type,'{}.pt'.format(slide_id))
 			filename = os.path.basename(full_path)
-   # print(filename)
+   			# print(filename)
 			features = torch.load(full_path)
 			return features, label
 

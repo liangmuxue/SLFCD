@@ -12,6 +12,7 @@ import h5py
 import matplotlib.pyplot as plt
 import openslide
 from visdom import Visdom
+from .vis import put_mask
 
 def viz_mask(img_path,npy_path,level=1):
     # PIL.Image.MAX_IMAGE_PIXELS = 933120000
@@ -335,7 +336,89 @@ def viz_within_dataset():
     # img_data = ptl_to_numpy(plt) 
     # # small_img = cv2.resize(img_data, (int(img_data.shape[1]/3),int(img_data.shape[0]/3)))        
     # visdom_data(img_data,[])
-       
+
+def viz_infer_dataset(results,dataset=None,result_path=None):
+    
+    # slide = openslide.OpenSlide("/home/liang/dataset/wsi/lsil/data/69-CG23_15361_01.svs")
+    # region_size = slide.level_dimensions[0]
+    # tim = np.array(slide.read_region((0,0), 0, region_size).convert("RGB"))
+    # data_loader = DataLoader(dataset,
+    #                               batch_size=1,
+    #                               num_workers=0)   
+     
+    viz_infer = Visdom(env="infer_viz", port=8098)
+    viz_tumor = Visdom(env="tumor_viz", port=8098)
+    
+    top_left = (0,0)
+    wsi_obj = dataset.get_wsi_obj()
+    region_size = wsi_obj.level_dimensions[dataset.patch_level]
+    total_img = np.array(wsi_obj.read_region(top_left, dataset.patch_level, region_size).convert("RGB"))   
+    # visdom_data(total_img,[],viz=viz_infer)
+    name = dataset.single_name
+    patch_size = dataset.patch_size
+    print("size:{}".format(len(dataset)))
+    for i in range(len(results)):
+        if (i % 100)==0:
+            print("process_{}".format(i))        
+        # if i<50000:
+        #     continue
+        item = results[i]
+        coord = item["coord"]
+        label = item["pred"]
+        # xyxy format
+        region = [coord[0],coord[1],coord[0]+patch_size,coord[1]+patch_size]
+        if label>0:   
+            probs = item["probs"]
+            # threshold filter
+            if probs<93:
+                continue
+            # 标注颜色
+            color_value = (85,85,205)    
+            color_mode = 'blue'             
+            if np.random.randint(1,2)==1:
+                win = "win_{}".format(i)
+                title = "label{}_{}_{}".format(label,probs,coord)
+                img_ori = total_img[region[1]:region[3],region[0]:region[2],:]
+                img = cv2.resize(img_ori,(patch_size,patch_size))
+                img = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
+                visdom_data(img, [], viz=viz_tumor,win=win,title=title)     
+            # 画出patch分割框线
+            x_min = region[0]
+            x_max = region[2]
+            y_min = region[1]
+            y_max = region[3]        
+            if (y_max>total_img.shape[0] or y_min>total_img.shape[0]):
+                y_max = total_img.shape[0] - dataset.patch_size//2
+                continue        
+            if (x_max>total_img.shape[1] or x_min>total_img.shape[1]):
+                continue
+            
+            # add mask by cv2
+            total_img = put_mask(total_img, region,color=color_value)
+            total_img[y_min:y_max,x_min,:] = color_value 
+            total_img[y_min:y_max,x_max,:] = color_value
+            total_img[y_min,x_min:x_max,:] = color_value
+            total_img[y_max,x_min:x_max,:] = color_value   
+            # # 框线之间的点，醒目标记         
+            # theta = np.arange(0, 2*np.pi, 0.01)
+            # radius = 30
+            # x = x_min + radius * np.cos(theta)
+            # y = y_min + radius * np.sin(theta)
+            # plt.fill(x, y, color=color_mode)                            
+        else:
+            color_value = 0
+            color_mode = 'black'      
+              
+    # fig = plt.figure(figsize=(region_size[0]//100, region_size[1]//100))           
+    # plt.imshow(total_img)
+    save_path = os.path.join(result_path,"plt_{}.png".format(name))
+    # fig.savefig(save_path,dpi=300)
+    # img_data = ptl_to_numpy(plt) 
+    total_img = cv2.cvtColor(total_img, cv2.COLOR_RGB2BGR)
+    visdom_data(total_img,[],viz=viz_infer)
+    cv2.imwrite(save_path,total_img)
+   
+          
 def viz_crop_patch(file_path,name,annotation_xywh,crop_region,patch_level=1,scale=4,viz=None):
     wsi_path = os.path.join(file_path,"data")
     mask_path = os.path.join(file_path,"tumor_mask_level{}".format(patch_level))

@@ -3,6 +3,7 @@
   "model": "cbam",
   "batch_size": 32,
   "image_size": 128,
+  "slide_size": 16,
   "patch_level": 0,
   "crop_size": 224,
   "normalize": "True",
@@ -18,7 +19,7 @@
   "epochs": 100,
   "log_every": 5,
   "num_workers": 6,
-  "load_weight": false,
-  "model_name" : "lsil_cbam_steplr",
+  "load_weight": true,
+  "model_name" : "lsil_cbam_with_feature",
   "work_dir": "results"
 }

@@ -312,6 +312,16 @@ def show_mask_img(color_data,target_shape):
     color_data_2 = color_data_2.transpose(1,2,0)
     return color_data_2
 
+def put_mask(image,mask_region,beta=0.5,gamma=0,color=(0, 255, 0)):
+    """加蒙层"""
+    
+    alpha = 1
+    zeros = np.zeros((image.shape), dtype=np.uint8)
+    zeros_mask = cv2.rectangle(zeros, (mask_region[0], mask_region[1]), (mask_region[2], mask_region[3]),
+                    color=color, thickness=-1)   
+    mask_img = cv2.addWeighted(image, alpha, zeros_mask, beta, gamma)
+    return mask_img
+
 def ptl_to_numpy(plt):
     from matplotlib.backends.backend_agg import FigureCanvasAgg
     canvas = FigureCanvasAgg(plt.gcf())

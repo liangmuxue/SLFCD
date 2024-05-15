@@ -380,6 +380,7 @@ def build_annotation_patches_single(file_path,xml_file,level=1,patch_size=64,pat
                     labels = labels_item
                 else:
                     labels = np.concatenate((labels,labels_item))
+        print("bboxes_data_arr time:{}".format((time.time()-start)*1000))
         
         # 从新创建标注数据集
         if "annotations" in f:
@@ -680,7 +681,7 @@ def build_normal_patches_image(file_path,is_normal=False,level=1,patch_size=64):
                 cv2.imwrite(save_file_path,crop_img)
             print("write image ok:{}".format(file_name))
 
-def combine_mul_dataset_csv(file_path,types):
+def combine_mul_dataset_csv(file_path,types,mode='hsil'):
     """Combine multiple tumor type csv,To: train,valid,test"""
     
     combine_train_split = None
@@ -688,7 +689,7 @@ def combine_mul_dataset_csv(file_path,types):
     for type in types:
         type_csv_train = os.path.join(file_path,type,"train.csv")
         train_split = pd.read_csv(type_csv_train)
-        train_split["label"] = get_combine_label_with_type(type)
+        train_split["label"] = get_combine_label_with_type(type,mode=mode)
         train_split.insert(train_split.shape[1], 'type', type)
         if combine_train_split is None:
             combine_train_split = train_split
@@ -698,7 +699,7 @@ def combine_mul_dataset_csv(file_path,types):
         type_csv_valid = os.path.join(file_path,type,"valid.csv")
         valid_split = pd.read_csv(type_csv_valid)
         # Reset label value
-        valid_split["label"] = get_combine_label_with_type(type)
+        valid_split["label"] = get_combine_label_with_type(type,mode=mode)
         # Add type column
         valid_split.insert(valid_split.shape[1], 'type', type)
         if combine_valid_split is None:
@@ -728,7 +729,8 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Get tumor mask of tumor-WSI and '
                                                  'save it in npy format')
     parser.add_argument('--source', default=None, type=str,help='Path to the WSI file')
-    parser.add_argument('--data_type',default='lsil', type=str,help='数据类别：hsil lsil ais')
+    parser.add_argument('--mode', default='hsil', type=str)
+    parser.add_argument('--types',default=["lsil","normal"], type=list,help='data types')
     parser.add_argument('--level', default=1, type=int, help='at which WSI level to obtain the mask, default 1')    
     parser.add_argument('--patch_size', default=64, type=int, help='切片尺寸，默认64*64')
     parser.add_argument('--patch_slide_size', default=64, type=int, help='滑动窗距离')
@@ -736,22 +738,5 @@ if __name__ == '__main__':
     args = parser.parse_args()
     
     file_path = args.source
-    # file_path = "/home/liang/dataset/wsi/lsil"
-    
-    # align_xml_svs(file_path)
-    # build_data_csv(file_path,is_normal=is_normal)
-    crop_with_annotation(file_path,level=args.level)
-    # # 识别模式
-    build_annotation_patches(file_path,mask_threhold=0.5,level=args.level,data_type=args.data_type,
-                             patch_size=args.patch_size,patch_slide_size=args.patch_slide_size)
-    # 目标检测模式
-    # build_annotation_patches_det(file_path,mask_threhold=0.005,level=args.level,patch_size=args.patch_size,data_type=args.data_type)
-    # aug_annotation_patches(file_path,'lsil',33)
-    # filter_patches_exclude_anno(file_path,level=args.level)
-    
-    # is_normal = False
-    # build_normal_patches_image(file_path,is_normal=is_normal)
-    # types = ["lsil","normal"]
-    types = ["lsil","normal"]
-    # combine_mul_dataset_csv(file_path,types)   
+    combine_mul_dataset_csv(file_path,args.types,mode=args.mode)   
     

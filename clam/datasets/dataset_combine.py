@@ -137,9 +137,9 @@ class Whole_Slide_Bag_COMBINE(Dataset):
 		has_anno_index = np.where(labels>0)[0] 
 		# 削减非标注样本数量，以达到数据规模平衡
 		if work_type=="train":
-			rate = 2
+			rate = 4
 		else:
-			rate = 2
+			rate = 4
 		# 削减未标注区域数量，和已标注区域数量保持一致比例
 		patches_bag_list = np.array(patches_bag_list)
 		keep_no_anno_num = rate * has_anno_index.shape[0]

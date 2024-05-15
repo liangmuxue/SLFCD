@@ -7,9 +7,12 @@ Label_Dict = [{"code":0,"group_code":"0","desc":"Normal","seq":0},
               {"code":6,"group_code":"C","desc":"Small hollowed-out cells, transparent","seq":3},
               ]
 
-Combine_Label_Dict = [
-                      # {"code":1,"type":"lsil"},
+Combine_Label_Dict_hsil = [
                       {"code":1,"type":"hsil"},
+                      {"code":0,"type":"normal"}
+              ]
+Combine_Label_Dict_lsil = [
+                      {"code":1,"type":"lsil"},
                       {"code":0,"type":"normal"}
               ]
 
@@ -51,14 +54,22 @@ def get_tumor_label_cate(mode=None):
         cate = [1,2,3,4,5,6]        
     return cate  
 
-
-def get_combine_label_with_type(type):
-    for item in Combine_Label_Dict:
-        if type==item["type"]:
-            return item["code"]
-        
-def get_combine_label_dict():
+#
+def get_combine_label_with_type(type,mode='hsil'):
+    if mode=='hsil':
+        for item in Combine_Label_Dict_hsil:
+            if type==item["type"]:
+                return item["code"]
+    if mode=='lsil':
+        for item in Combine_Label_Dict_lsil:
+            if type==item["type"]:
+                return item["code"]        
+def get_combine_label_dict(mode):
     dict = {}
-    for item in Combine_Label_Dict:
-        dict[item["type"]] = item["code"]
+    if mode=='hsil':
+        for item in Combine_Label_Dict_hsil:
+            dict[item["type"]] = item["code"]
+    if mode=='lsil':
+        for item in Combine_Label_Dict_lsil:
+            dict[item["type"]] = item["code"]            
     return dict

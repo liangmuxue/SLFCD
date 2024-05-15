@@ -66,7 +66,7 @@ class CbamExt(ResNet):
         else:
             x = F.avg_pool2d(x, 4)
         x = x.reshape(x.size(0),-1)
-        x = self.fc(x)
-        return x
+        x_fc = self.fc(x)
+        return x,x_fc
         
         

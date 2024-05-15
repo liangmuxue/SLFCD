@@ -93,7 +93,7 @@ class CoolSystem(pl.LightningModule):
             ],  weight_decay=1e-4,lr=self.params.lr,capturable=True)
         # optimizer.param_groups[0]['capturable'] = True
         scheduler = torch.optim.lr_scheduler.StepLR(optimizer=optimizer,gamma=0.3, step_size=5)
-        # scheduler = torch.optim.lr_scheduler.CyclicLR(optimizer=optimizer,cycle_momentum=False,base_lr=1e-5,max_lr=1.5e-4,step_size_up=30)
+        scheduler = torch.optim.lr_scheduler.CyclicLR(optimizer=optimizer,cycle_momentum=False,base_lr=1e-5,max_lr=1e-4,step_size_up=20)
         # scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer=optimizer,T_max=16,eta_min=1e-4)
 
         return [optimizer], [scheduler]
@@ -105,8 +105,8 @@ class CoolSystem(pl.LightningModule):
         x = x.to(device)
         y = y.to(device)
         self.model = self.model.to(device)
-        output = self.model.forward(x)
-        output = torch.squeeze(output,dim=-1) 
+        output_feature,output_fc = self.model.forward(x)
+        output = torch.squeeze(output_fc,dim=-1) 
         loss = self.loss_fn(output, y)
         predicts = F.softmax(output,dim=-1)
         predicts = torch.max(predicts,dim=-1)[1] 
@@ -136,8 +136,8 @@ class CoolSystem(pl.LightningModule):
         x = x.to(device)
         y = y.to(device)
         self.model = self.model.to(device)
-        output = self.model.forward(x)
-        output = torch.squeeze(output,dim=-1) 
+        output_feature,output_fc = self.model.forward(x)
+        output = torch.squeeze(output_fc,dim=-1) 
         loss = self.loss_fn(output, y)
         predicts = F.softmax(output,dim=-1)
         predicts = torch.max(predicts,dim=-1)[1]    
@@ -160,12 +160,14 @@ class CoolSystem(pl.LightningModule):
         
         for index in tumor_index:
             if np.random.randint(1,50)==3:
-                self._viz_sample(img_ori, y, index, all_labes=all_labes,viz=viz_tumor_valid)
+                corr = (predicts[index]==1)
+                self._viz_sample(img_ori, y, index, all_labes=all_labes,viz=viz_tumor_valid,corr=corr)
                 
         normal_index = torch.where(y==0)[0]    
         for index in normal_index:
             if np.random.randint(1,50)==3:
-                self._viz_sample(img_ori, y, index, all_labes=all_labes,viz=viz_normal_valid)    
+                corr = (predicts[index]==0)
+                self._viz_sample(img_ori, y, index, all_labes=all_labes,viz=viz_normal_valid,corr=corr)    
                      
         results = np.array(results)
                 
@@ -179,14 +181,14 @@ class CoolSystem(pl.LightningModule):
 
         return {'val_loss': loss, 'val_acc': acc}
 
-    def _viz_sample(self,x,y,index,all_labes=None,viz=None):
+    def _viz_sample(self,x,y,index,all_labes=None,viz=None,corr=False):
         ran_idx = np.random.randint(1,5)
         win = "win_{}".format(ran_idx)
         label = y[index]
         sample_img = x[index]
         sample_img_shw = sample_img
         # sample_img_shw = cv2.resize(sample_img_shw,(64,64))
-        title = "label{}_{}".format(label,ran_idx)    
+        title = "label:{}:,corr:{}".format(label,corr)    
         visdom_data(sample_img_shw, [], viz=viz,win=win,title=title)    
         
     def on_validation_epoch_start(self):
@@ -259,7 +261,7 @@ class CoolSystem(pl.LightningModule):
                                      std=[0.229, 0.224, 0.225])            
         trans = transforms.Compose([
                     transforms.ToTensor(),
-                    transforms.CenterCrop(224),
+                    transforms.Resize(224),
                     # normalize,
                 ])          
         dataset_valid = Whole_Slide_Bag_COMBINE(file_path,wsi_path,mask_path,work_type="valid",mode=hparams.mode,patch_path=hparams.patch_path,transform=trans,
@@ -303,7 +305,8 @@ def main(hparams,device_ids=None):
         monitor='val_loss',
         dirpath=checkpoint_path,
         filename=filename,
-        save_top_k=3,
+        save_last=True,
+        save_top_k=-1,
         auto_insert_metric_name=False
     ) 
     logger_name = "app_log"

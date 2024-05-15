@@ -8,6 +8,8 @@ import pdb
 import time
 import json
 from argparse import Namespace
+import torchvision.transforms as transforms
+
 from clam.datasets.dataset_h5 import Dataset_Combine_Bags, Whole_Slide_Bag_FP
 from torch.utils.data import DataLoader
 from clam.models.resnet_custom import resnet50_baseline
@@ -39,7 +41,13 @@ def compute_w_loader(file_path, output_path, wsi, model,
 		custom_downsample: custom defined downscale factor of image patches
 		target_patch_size: custom defined, rescaled image size before embedding
 	"""
-	dataset = Whole_Slide_Bag_FP(file_path=file_path, wsi=wsi, pretrained=pretrained,
+
+	custom_transforms = transforms.Compose([
+				transforms.ToTensor(),
+				transforms.Resize(224),
+				# normalize,
+			]) 	
+	dataset = Whole_Slide_Bag_FP(file_path=file_path, wsi=wsi, pretrained=pretrained,custom_transforms=custom_transforms,
 		custom_downsample=custom_downsample, target_patch_size=target_patch_size)
 	x, y = dataset[0]
 	kwargs = {'num_workers': 4, 'pin_memory': True} if device.type == "cuda" else {}
@@ -55,7 +63,7 @@ def compute_w_loader(file_path, output_path, wsi, model,
 				print('batch {}/{}, {} files processed'.format(count, len(loader), count * batch_size))
 			batch = batch.to(device, non_blocking=True)
 			
-			features = model(batch)
+			features,cls_emb = model(batch)
 			features = features.cpu().numpy()
 
 			asset_dict = {'features': features, 'coords': coords}
@@ -68,6 +76,8 @@ def compute_w_loader(file_path, output_path, wsi, model,
 parser = argparse.ArgumentParser(description='Feature Extraction')
 # parser.add_argument('--data_h5_dir', type=str, default=None)
 parser.add_argument('--data_dir', type=str, default=None)
+parser.add_argument('--mode', type=str, default=None)
+parser.add_argument('--level', type=int, default=1)
 parser.add_argument('--slide_ext', type=str, default='.svs')
 parser.add_argument('--types', type=str, default=None)
 parser.add_argument('--feat_dir', type=str, default=None)
@@ -81,7 +91,7 @@ if __name__ == '__main__':
 
 	print('initializing dataset')
 	#cnn_path = 'custom/configs/config_lsil.json'
-	cnn_path = 'custom/configs/config_hsil.json'
+	cnn_path = 'custom/configs/config_{}_liang.json'.format(args.mode)
 	with open(cnn_path, 'r') as f:
 		att_args = json.load(f) 
 	hparams = Namespace(**att_args) 
@@ -102,7 +112,7 @@ if __name__ == '__main__':
 	checkpoint_path_file = "{}/{}".format(checkpoint_path, file_name)
 	model = CoolSystem.load_from_checkpoint(checkpoint_path_file).to(device)
 	# Remove Fc layer
-	model = torch.nn.Sequential(*(list(model.model.children())[:-1]))
+ # model = torch.nn.Sequential(*(list(model.model.children())[:-1]))
 	
 	# print_network(model)
 	if torch.cuda.device_count() > 1:
@@ -114,7 +124,7 @@ if __name__ == '__main__':
 	for bag_candidate_idx in range(total):
 		type, slide_id = bags_dataset[bag_candidate_idx]
 		data_slide_dir = os.path.join(data_path, type, "data")
-		data_h5_dir = os.path.join(data_path, type, "patches_level1")
+		data_h5_dir = os.path.join(data_path, type, "patches_level{}".format(args.level))
 		slide_id = slide_id.split(args.slide_ext)[0]
 		bag_name = slide_id + '.h5'
 		bag_base, _ = os.path.splitext(bag_name)
@@ -125,17 +135,6 @@ if __name__ == '__main__':
 				
 		h5_file_path = os.path.join(data_h5_dir, bag_name)
 		slide_file_path = os.path.join(data_slide_dir, slide_id + args.slide_ext)
-		#lsil
-		if os.path.basename(slide_file_path) == '62-CG23_14933_02.svs':
-			continue
-		if os.path.basename(slide_file_path) == '86-CG23_18818_01.svs':
-			continue
-		if os.path.basename(slide_file_path) == '98-CG23_19585_02.svs':
-			continue
-		#hsil
-		if os.path.basename(slide_file_path) == '100-CG23_15432_02.svs':
-			continue
-		
 		print('\nprogress: {}/{}'.format(bag_candidate_idx, total))
 
 		if not args.no_auto_skip and slide_id + '.pt' in dest_files:
@@ -146,9 +145,13 @@ if __name__ == '__main__':
 		time_start = time.time()
 		wsi = openslide.open_slide(slide_file_path)
 		print("wsi", wsi)
-		output_file_path = compute_w_loader(h5_file_path, output_path, wsi,
-		model=model, batch_size=args.batch_size, verbose=1, print_every=20,
-		custom_downsample=args.custom_downsample, target_patch_size=args.target_patch_size)
+		try:
+			output_file_path = compute_w_loader(h5_file_path, output_path, wsi,
+			model=model, batch_size=args.batch_size, verbose=1, print_every=20,
+			custom_downsample=args.custom_downsample, target_patch_size=args.target_patch_size)
+		except Exception as e:
+			print("compute_w_loader fail:{}".format(bag_name))
+			continue
 		time_elapsed = time.time() - time_start
 		print('\ncomputing features for {} took {} s'.format(output_file_path, time_elapsed))
 		file = h5py.File(output_file_path, "r")
@@ -157,6 +160,5 @@ if __name__ == '__main__':
 		print('features size: ', features.shape)
 		print('coordinates size: ', file['coords'].shape)
 		features = torch.from_numpy(features)
-		features = features[:,:, 0, 0]
 		torch.save(features, fea_file_path)
 

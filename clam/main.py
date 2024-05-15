@@ -18,7 +18,7 @@ import torch.nn.functional as F
 import pandas as pd
 import numpy as np
 
-def return_splits(data_dir):
+def return_splits(data_dir,type='hsil'):
     train_dataset = Combine_MIL_Dataset(
                             data_dir= data_dir,
                             mode="train",
@@ -26,6 +26,7 @@ def return_splits(data_dir):
                             seed = args.seed, 
                             print_info = True,
                             patient_strat= False,
+                            type=type,
                             ignore=[])
     valid_dataset = Combine_MIL_Dataset(
                             data_dir= data_dir,
@@ -34,6 +35,7 @@ def return_splits(data_dir):
                             seed = args.seed, 
                             print_info = True,
                             patient_strat= False,
+                            type=type,
                             ignore=[])       
     test_dataset = Combine_MIL_Dataset(
                             data_dir= data_dir,
@@ -42,6 +44,7 @@ def return_splits(data_dir):
                             seed = args.seed, 
                             print_info = True,
                             patient_strat= False,
+                            type=type,
                             ignore=[])           
     return train_dataset, valid_dataset, test_dataset
 
@@ -66,7 +69,7 @@ def main(args):
     folds = np.arange(start, end)
     for i in folds:
         seed_torch(args.seed)
-        train_dataset, val_dataset, test_dataset = return_splits(args.data_dir)
+        train_dataset, val_dataset, test_dataset = return_splits(args.data_dir,type=args.type)
         
         datasets = (train_dataset, val_dataset, test_dataset)
         results, test_auc, val_auc, test_acc, val_acc  = train(datasets, i, args)
@@ -90,6 +93,7 @@ def main(args):
 # Generic training settings
 parser = argparse.ArgumentParser(description='Configurations for WSI Training')
 parser.add_argument('--device', default="cuda:0", type=str)
+parser.add_argument('--type', default="hsil", type=str)
 parser.add_argument('--load_weights', action='store_true', default=False, help='Load pretrained weights to model')
 parser.add_argument('--data_dir', type=str, default=None, 
                     help='data directory')

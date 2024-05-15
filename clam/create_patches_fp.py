@@ -63,7 +63,7 @@ def seg_and_patch(source, save_dir, patch_save_dir, mask_save_dir, stitch_save_d
 	# 如果有覆盖的标志，则先清除相关文件
 	if cover:
 		# 清除所有h5文件
-		h5_path = os.path.join(source,"patch_level{}".format(patch_level))
+		h5_path = os.path.join(source,"patches_level{}".format(patch_level))
 		shutil.rmtree(h5_path)  
 		os.mkdir(h5_path)  
 		# 清除列表文件
@@ -120,14 +120,12 @@ def seg_and_patch(source, save_dir, patch_save_dir, mask_save_dir, stitch_save_d
 		xml_path = os.path.join(source, "xml", xml_file)
 		tumor_mask_file = slide.replace(".svs", ".npy")
 		tumor_mask_path = os.path.join(source, "tumor_mask", tumor_mask_file)
-		if is_normal:
-			
-			if not os.path.exists(xml_path):
-				df.loc[idx, 'status'] = 'failed_seg'
-				continue
+		# if is_normal:
+		# 	if not os.path.exists(xml_path):
+		# 		df.loc[idx, 'status'] = 'failed_seg'
+		# 		continue
 		WSI_object = WholeSlideImage(full_path)
 		if  os.path.exists(xml_path):
-			
 			WSI_object.initXML(xml_path)
 # WSI_object.initMask(tumor_mask_path)
 
@@ -245,8 +243,9 @@ def seg_and_patch(source, save_dir, patch_save_dir, mask_save_dir, stitch_save_d
 	seg_times /= total
 	patch_times /= total
 	stitch_times /= total
-
-	df = df[df["status"] != "failed_seg"]
+	
+	if not is_normal:
+		df = df[df["status"] != "failed_seg"]
 	df.to_csv(os.path.join(save_dir, 'process_list_autogen.csv'), index=False)
 	print("average segmentation time in s per slide: {}".format(seg_times))
 	print("average patching time in s per slide: {}".format(patch_times))
@@ -274,8 +273,8 @@ parser.add_argument('--patch_level', type=int, default=1,
 					help='downsample level at which to patch')
 parser.add_argument('--process_list', type=str, default=None,
 					help='name of list of images to process with parameters (.csv)')
-parser.add_argument('--is_normal', default=False, action='store_false')
-parser.add_argument('--cover', default=False, action='store_false')
+parser.add_argument('--normal', default=False, action='store_true')
+parser.add_argument('--cover', default=False, action='store_true')
 
 if __name__ == '__main__':
 	args = parser.parse_args()
@@ -339,4 +338,4 @@ if __name__ == '__main__':
 											stitch=args.stitch,
 											patch_level=args.patch_level, patch=args.patch,
 											cover=args.cover,
-											process_list=process_list, auto_skip=args.no_auto_skip, is_normal=args.is_normal)
+											process_list=process_list, auto_skip=args.no_auto_skip, is_normal=args.normal)
