@@ -5,7 +5,7 @@
 1 规整文件命名以及xml拷贝
   data_prepare.py 的 align_xml_svs 方法
 
-2 生成normal切片（默认level1）
+2 生成normal切片（默认level1） 
   create_patches_fp.py
   输入目录 data 输出目录 patches_level1 ,输出内容包括多个h5文件，以及process_list_autogen.csv
 
