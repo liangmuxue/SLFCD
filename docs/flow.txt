@@ -5,36 +5,33 @@
 1 规整文件命名以及xml拷贝
   data_prepare.py 的 align_xml_svs 方法
 
-2 生成normal切片（默认level1） 
+2 生成normal切片（默认level1）
   create_patches_fp.py
+  --source /home/liang/dataset/wsi/hsil --save_dir /home/liang/dataset/wsi/hsil --step_size 128 --patch_size 128  --patch_level 1 --seg --patch --stitch 
   输入目录 data 输出目录 patches_level1 ,输出内容包括多个h5文件，以及process_list_autogen.csv
 
 3 xml标注文件转json 
   utexml2json2.py
-   
-4 tumor_mask.py
-	输出目录 tumor_mask_level1
 	
-5 生成训练和测试数据对照表 csv
+4 生成训练和测试数据对照表 csv
   data_prepare.py 的 build_data_csv 方法
   
-6 生成标注对应的图片patch
+5 生成标注对应的图片patch
   data_prepare.py 的 crop_with_annotation 以及 build_annotation_patches (目标检测版本使用build_annotation_patches) 方法  
   输出目录 tumor_patch_img
 
-7 生成未标注区域对应的图片patch (目标检测版本中取消)
-  data_prepare.py 的 filter_patches_exclude_anno 方法,从patch数据中删除标注区域
-  data_prepare.py 的 build_normal_patches_image 方法  (Option)
-  输出目录 normal_patch_img
-    
-8 训练
+6 训练
   train_with_clamdata.py    
     
-对于normal类型，适用 2,5,7
+对于normal类型，适用 2,6
 
 二 一阶段测试及推理
-1 生成热力图
- camelyon16/bin/probs_map.py
+1 生成推理结果
+ came_inference.py main 方法
+    --mode lsil --slide_size 128
+     
+2 可视化
+  came_inference.py viz_results 方法
 
     
 三 第二阶段
