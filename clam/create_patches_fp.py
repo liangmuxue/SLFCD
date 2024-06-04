@@ -11,6 +11,7 @@ import pdb
 import pandas as pd
 import shutil  
 
+
 def stitching(file_path, wsi_object, downscale=64):
 	start = time.time()
 	heatmap = StitchCoords(file_path, wsi_object, downscale=downscale, bg_color=(0, 0, 0), alpha=-1, draw_grid=False)
@@ -221,7 +222,7 @@ def seg_and_patch(source, save_dir, patch_save_dir, mask_save_dir, stitch_save_d
 			file_path, patch_time_elapsed = patching(WSI_object=WSI_object, **current_patch_params,)
 			if file_path is None:
 				df.loc[idx, 'status'] = 'failed_seg'
-				continue				
+				continue
 		
 		stitch_time_elapsed = -1
 		if stitch:
@@ -246,7 +247,7 @@ def seg_and_patch(source, save_dir, patch_save_dir, mask_save_dir, stitch_save_d
 	
 	if not is_normal:
 		df = df[df["status"] != "failed_seg"]
-	df.to_csv(os.path.join(save_dir, 'process_list_autogen.csv'), index=False)
+ # df.to_csv(os.path.join(save_dir, 'process_list_autogen.csv'), index=False)
 	print("average segmentation time in s per slide: {}".format(seg_times))
 	print("average patching time in s per slide: {}".format(patch_times))
 	print("average stiching time in s per slide: {}".format(stitch_times))
@@ -255,32 +256,25 @@ def seg_and_patch(source, save_dir, patch_save_dir, mask_save_dir, stitch_save_d
 
 
 parser = argparse.ArgumentParser(description='seg and patch')
-parser.add_argument('--source', type=str,
-					help='path to folder containing raw wsi image files')
-parser.add_argument('--step_size', type=int, default=256,
-					help='step_size')
-parser.add_argument('--patch_size', type=int, default=256,
-					help='patch_size')
-parser.add_argument('--patch', default=False, action='store_true')
-parser.add_argument('--seg', default=False, action='store_true')
-parser.add_argument('--stitch', default=False, action='store_true')
+parser.add_argument('--source', type=str, default=r"/home/bavon/datasets/wsi/ais", help='path to folder containing raw wsi image files')
+parser.add_argument('--step_size', type=int, default=32, help='step_size')
+parser.add_argument('--patch_size', type=int, default=256, help='patch_size')
+parser.add_argument('--patch', default=True, action='store_true')
+parser.add_argument('--seg', default=True, action='store_true')
+parser.add_argument('--stitch', default=True, action='store_true')
 parser.add_argument('--no_auto_skip', default=True, action='store_false')
-parser.add_argument('--save_dir', type=str,
-					help='directory to save processed data')
-parser.add_argument('--preset', default=None, type=str,
-					help='predefined profile of default segmentation and filter parameters (.csv)')
-parser.add_argument('--patch_level', type=int, default=1,
-					help='downsample level at which to patch')
-parser.add_argument('--process_list', type=str, default=None,
-					help='name of list of images to process with parameters (.csv)')
+parser.add_argument('--save_dir', type=str, default=r"/home/bavon/datasets/wsi/ais", help='directory to save processed data')
+parser.add_argument('--preset', default=None, type=str, help='predefined profile of default segmentation and filter parameters (.csv)')
+parser.add_argument('--patch_level', type=int, default=1, help='downsample level at which to patch')
+parser.add_argument('--process_list', type=str, default=None, help='name of list of images to process with parameters (.csv)')
 parser.add_argument('--normal', default=False, action='store_true')
-parser.add_argument('--cover', default=False, action='store_true')
+parser.add_argument('--cover', default=True, action='store_true')
 
 if __name__ == '__main__':
 	args = parser.parse_args()
 
 	patch_save_dir = os.path.join(args.save_dir, 'patches_level{}'.format(args.patch_level))
-	mask_save_dir = os.path.join(args.save_dir, 'masks')
+	mask_save_dir = os.path.join(args.save_dir, 'mask')
 	stitch_save_dir = os.path.join(args.save_dir, 'stitches')
 
 	if args.process_list:
@@ -289,11 +283,6 @@ if __name__ == '__main__':
 	else:
 		process_list = None
 
-	print('source: ', args.source)
-	print('patch_save_dir: ', patch_save_dir)
-	print('mask_save_dir: ', mask_save_dir)
-	print('stitch_save_dir: ', stitch_save_dir)
-	
 	directories = {'source': args.source,
 				   'save_dir': args.save_dir,
 				   'patch_save_dir': patch_save_dir,
@@ -304,6 +293,27 @@ if __name__ == '__main__':
 		print("{} : {}".format(key, val))
 		if key not in ['source']:
 			os.makedirs(val, exist_ok=True)
+
+	# 分割参数列表如下：
+	# seg_level：用于分割 WSI 的下采样级别（默认值：-1，它使用最接近 64x 下采样的 WSI 中的下采样）
+	# sthresh：分割阈值（正整数，默认值：8，使用更高的阈值会导致更少的前台和更多的后台检测）
+	# mthresh：中值滤波器大小（正，奇数整数，默认值：7）
+	# use_otsu：使用 otsu 的方法代替简单的二进制阈值（默认值：False）
+	# close：在初始阈值（正整数或 -1，默认值：4）之后应用的附加形态闭合
+
+	# 等值线滤波参数列表如下：
+	# a_t：组织的区域过滤器阈值（正整数，相对于级别 0 时 512 x 512 的参考斑块大小，要考虑的检测到的前景轮廓的最小大小，例如，值 10 表示仅检测到大小大于 10 的前景轮廓 0 大小的 512 x 512 大小的斑块，默认值：100）
+	# a_h：孔的区域过滤器阈值（正整数，前景轮廓中要避免的检测到的孔/腔的最小尺寸，再次相对于级别 0 的 512 x 512 大小的面片，默认值：16）
+	# max_n_holes：每个检测到的前景等值线要考虑的最大孔数（正整数，默认值：10，最大值越高，修补越准确，但会增加计算成本）
+
+	# 分割可视化参数列表如下：
+	# vis_level：下采样级别以可视化分割结果（默认值：-1，使用WSI中最接近64倍下采样的下采样）
+	# line_thickness：用于绘制的线粗细 可视化分割结果（正整数，以绘制线在级别 0 处占用的像素数表示，默认值：250）
+
+	# 补丁参数列表如下：
+	# use_padding：是否填充幻灯片的边框（默认值：True）
+	# contour_fn：轮廓检查功能，用于决定应将面片视为前景还是背景（在“four_pt”之间进行选择 - 检查围绕面片中心的小网格中的所有四个点是否都在等高线内，
+	# “center” - 检查面片的中心是否在等高线内， “basic” - 检查面片的左上角是否在等高线内， 默认值： 'four_pt'）
 
 	seg_params = {'seg_level':-1, 'sthresh': 8, 'mthresh': 7, 'close': 4, 'use_otsu': False,
 				  'keep_ids': 'none', 'exclude_ids': 'none'}
@@ -330,7 +340,7 @@ if __name__ == '__main__':
 	 			  'patch_params': patch_params,
 				  'vis_params': vis_params}
 
-	print(parameters)
+	print("parameters: ", parameters)
 
 	seg_times, patch_times = seg_and_patch(**directories, **parameters,
 											patch_size=args.patch_size, step_size=args.step_size,
@@ -339,3 +349,4 @@ if __name__ == '__main__':
 											patch_level=args.patch_level, patch=args.patch,
 											cover=args.cover,
 											process_list=process_list, auto_skip=args.no_auto_skip, is_normal=args.normal)
+	print("process success!!!")

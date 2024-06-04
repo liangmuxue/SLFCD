@@ -82,7 +82,8 @@ class Generic_WSI_Classification_Dataset(Dataset):
 
 	def cls_ids_prep(self):
 		# store ids corresponding each class at the patient or case level
-		self.patient_cls_ids = [[] for i in range(self.num_classes)]		
+		# 得到不同类别的索引
+		self.patient_cls_ids = [[] for i in range(self.num_classes)]
 		for i in range(self.num_classes):
 			self.patient_cls_ids[i] = np.where(self.patient_data['label'] == i)[0]
 
@@ -92,12 +93,14 @@ class Generic_WSI_Classification_Dataset(Dataset):
 			self.slide_cls_ids[i] = np.where(self.slide_data['label'] == i)[0]
 
 	def patient_data_prep(self, patient_voting='max'):
-		patients = np.unique(np.array(self.slide_data['case_id'])) # get unique patients
+		patients = np.unique(np.array(self.slide_data['case_id']))  # get unique patients
 		patient_labels = []
 		
 		for p in patients:
+			# 取出对应的数据的索引
 			locations = self.slide_data[self.slide_data['case_id'] == p].index.tolist()
 			assert len(locations) > 0
+			# 取出对应的数据的label
 			label = self.slide_data['label'][locations].values
 			if patient_voting == 'max':
 				label = label.max() # get patient label (MIL convention)
@@ -406,7 +409,7 @@ class Combine_MIL_Dataset(Generic_WSI_Classification_Dataset):
 			csv_path = os.path.join(self.data_dir,"test.csv")	
 							
 		self.slide_data = pd.read_csv(csv_path)
-		self.patient_data_prep(patient_voting)
+		self.patient_data_prep(patient_voting)  # 得到标签和索引
 		self.cls_ids_prep()
 
 		if print_info:

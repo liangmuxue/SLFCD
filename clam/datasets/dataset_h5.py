@@ -117,7 +117,7 @@ class Whole_Slide_Bag_FP(Dataset):
 			self.roi_transforms = custom_transforms
 
 		self.file_path = file_path
-
+  # print(self.file_path)
 		with h5py.File(self.file_path, "r") as f:
 			dset = f['coords']
 			self.patch_level = f['coords'].attrs['patch_level']
@@ -182,7 +182,7 @@ class Dataset_Combine_Bags(Dataset):
 			if self.data_df is None:
 				self.data_df = df
 			else:
-				self.data_df = pd.concat([self.data_df,df])
+				self.data_df = pd.concat([self.data_df, df])
 	
 	def __len__(self):
 		return len(self.data_df)

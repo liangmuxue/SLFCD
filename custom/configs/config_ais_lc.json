@@ -1,0 +1,24 @@
+{
+  "mode": "single",
+  "model": "cbam",
+  "batch_size": 16,
+  "image_size": 256,
+  "patch_level": 1,
+  "slide_size": 32,
+  "crop_size": 224,
+  "normalize": "True",
+  "lr": 1e-4,
+  "momentum": 0.9,
+  "data_path": "/home/bavon/datasets/wsi/ais",
+  "train_csv": "train.csv",
+  "valid_csv": "valid.csv",
+  "tumor_mask_path": "tumor_mask_level1",
+  "patch_path": "patches_level1",
+  "epochs": 10,
+  "log_every": 5,
+  "num_workers": 6,
+  "load_weight": false,
+  "model_name" : "ais_cbam_with_feature",
+  "work_dir": "results"
+}
+

@@ -38,11 +38,11 @@ from custom.train_with_clamdata import CoolSystem,get_last_ck_file
 from utils.vis import visdom_data
 from visdom import Visdom
 
-device = torch.device('cuda:0')
-viz_tumor = Visdom(env="tumor_viz", port=8098)
+device = torch.device('cuda:1')
+# viz_tumor = Visdom(env="tumor_viz")
 
 def main(hparams,device_ids=None,single_name=None,result_path=None,slide_size=128):
-    checkpoint_path = os.path.join(hparams.work_dir,"checkpoints",hparams.model_name)
+    checkpoint_path = os.path.join("..", "..", hparams.work_dir,"checkpoints",hparams.model_name)
     filename = 'slfcd-{epoch:02d}-{val_loss:.2f}'
     
     checkpoint_callback = ModelCheckpoint(
@@ -57,16 +57,17 @@ def main(hparams,device_ids=None,single_name=None,result_path=None,slide_size=12
         pl_loggers.TensorBoardLogger(save_dir=hparams.work_dir, name=logger_name, version=hparams.model_name)
     )             
     log_path = os.path.join(hparams.work_dir,logger_name,hparams.model_name) 
-    
-    if hparams.load_weight:
-        file_name = get_last_ck_file(checkpoint_path)
-        checkpoint_path_file = "{}/{}".format(checkpoint_path,file_name)
-        # model = torch.load(checkpoint_path_file) # 
-        model = CoolSystemInfer.load_from_checkpoint(checkpoint_path_file).to(device)
-        # 使用当前配置里的超参数
-        model.params = hparams
-        model.result_path = result_path
-        model.file_name = single_name
+
+    file_name = get_last_ck_file(checkpoint_path)
+    checkpoint_path_file = "{}/{}".format(checkpoint_path,file_name)
+    print("checkpoint_path: ", checkpoint_path)
+        
+    # model = torch.load(checkpoint_path_file) # 
+    model = CoolSystemInfer.load_from_checkpoint(checkpoint_path_file).to(device)
+    # 使用当前配置里的超参数
+    model.params = hparams
+    model.result_path = result_path
+    model.file_name = single_name
 
     trainer = pl.Trainer(
         max_epochs=hparams.epochs,
@@ -89,6 +90,7 @@ def main(hparams,device_ids=None,single_name=None,result_path=None,slide_size=12
                                   num_workers=1)        
     print("total len:{}".format(len(dataset_infer)))     
     predictions = trainer.predict(model=model,dataloaders=inference_loader)
+    # print("predictions: ", predictions)
 
 def viz_results(hparams,single_name=None,result_path=None,slide_size=128):
     """可视化"""
@@ -101,7 +103,8 @@ def viz_results(hparams,single_name=None,result_path=None,slide_size=128):
     viz_infer_dataset(result_data,dataset=dataset_infer,result_path=result_path) 
 
 def single_img_inference(img_path,hparams=None):
-    checkpoint_path = os.path.join(hparams.work_dir,"checkpoints",hparams.model_name)
+    checkpoint_path = os.path.join("..", "..", hparams.work_dir,"checkpoints",hparams.model_name)
+    print("checkpoint_path: ", checkpoint_path)
     file_name = get_last_ck_file(checkpoint_path)
     checkpoint_path_file = "{}/{}".format(checkpoint_path,file_name)
     model = CoolSystemInfer.load_from_checkpoint(checkpoint_path_file).to(device)
@@ -140,7 +143,7 @@ class CoolSystemInfer(CoolSystem):
                 win = "win_{}".format(tum_idx[j])
                 probs_show = int(round(probs[tum_idx[j]][1],2)*100)
                 title = "{}_{}".format(probs_show,coord[tum_idx[j]].cpu().numpy().tolist())
-                visdom_data(img_ori[j],[], win=win,title=title,viz=viz_tumor)
+                # visdom_data(img_ori[j],[], win=win,title=title,viz=viz_tumor)
                 item[tum_idx[j]]["pred"] = 1
                 item[tum_idx[j]]["probs"] = probs_show
             results[tum_idx,0] = 1
@@ -166,34 +169,34 @@ class CoolSystemInfer(CoolSystem):
     
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Train model')
-    parser.add_argument('--device_ids', default='0', type=str, help='choose device')
-    parser.add_argument('--mode', default='lsil', type=str, help='choose type')
-    parser.add_argument('--result_path', default='', type=str)
-    parser.add_argument('--slide_size', default=128, type=int)
-    parser.add_argument('--inf_filename', default='2-CG23_10410_02', type=str)
+    parser.add_argument('--device_ids', default='1', type=str, help='choose device')
+    parser.add_argument('--mode', default='ais', type=str, help='choose type')
+    parser.add_argument('--result_path', default='/home/bavon/project/SLFCD/SLFCD/results/checkpoints', type=str)
+    parser.add_argument('--slide_size', default=256, type=int)
+    parser.add_argument('--inf_filename', default='13-CG23_01406_05', type=str)
     args = parser.parse_args()
     device_ids = args.device_ids
     result_path = args.result_path
     slide_size = args.slide_size
     single_name = args.inf_filename
-    single_name = "6-CG23_12974_06"
+    # single_name = "6-CG23_12974_06"
     # cnn_path = 'custom/configs/config_lsil.json'
     # cnn_path = 'custom/configs/config_hsil.json'
     if args.mode=="hsil":
         cnn_path = 'custom/configs/config_hsil_liang.json'
     if args.mode=="lsil":
         cnn_path = 'custom/configs/config_lsil_liang.json'        
+    if args.mode=="ais":
+        cnn_path = '/home/bavon/project/SLFCD/SLFCD/custom/configs/config_ais_lc.json'  
     with open(cnn_path, 'r') as f:
         args = json.load(f) 
     
-    
-    hyperparams = Namespace(**args)   
-    # single_name = "80-CG23_15274_01"
-    # single_name = "2-CG23_10410_02"
-    # main(hyperparams,device_ids=device_ids,single_name=single_name,result_path=result_path,slide_size=slide_size)
+    hyperparams = Namespace(**args)
+    print("hyperparams: ", hyperparams)
+    main(hyperparams,device_ids=device_ids,single_name=single_name,result_path=result_path,slide_size=slide_size)
     viz_results(hyperparams,single_name=single_name,result_path=result_path,slide_size=slide_size)
-    img_path = "results/infer_prop/input/test1.png"
+    
+    # img_path = "/home/bavon/project/SLFCD/SLFCD/custom/infer/plt_99-CG20_01009_05.png"
     # single_img_inference(img_path,hparams=hyperparams)
-            
-        
+    print("process successful!!!")
         

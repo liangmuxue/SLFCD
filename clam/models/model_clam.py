@@ -79,10 +79,7 @@ args:
     instance_loss_fn: loss function to supervise instance-level training
     subtyping: whether it's a subtyping problem
 """
-
-
 class CLAM_SB(nn.Module):
-
     def __init__(self, gate=True, size_arg="small", dropout=False, k_sample=8, n_classes=2,
         instance_loss_fn=nn.CrossEntropyLoss(), subtyping=False):
         super(CLAM_SB, self).__init__()
@@ -109,7 +106,7 @@ class CLAM_SB(nn.Module):
         initialize_weights(self)
 
     def relocate(self):
-        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        device = torch.device("cuda:1" if torch.cuda.is_available() else "cpu")
         self.attention_net = self.attention_net.to(device)
         self.classifiers = self.classifiers.to(device)
         self.instance_classifiers = self.instance_classifiers.to(device)
@@ -124,21 +121,21 @@ class CLAM_SB(nn.Module):
     
     # instance-level evaluation for in-the-class attention branch
     def inst_eval(self, A, h, classifier): 
-        device = h.device
+        device = h.device  # A -> torch.Size([1, 6562])   h -> torch.Size([6562, 512])
         if len(A.shape) == 1:
             A = A.view(1, -1)
-        top_p_ids = torch.topk(A, self.k_sample)[1][-1]
-        top_p = torch.index_select(h, dim=0, index=top_p_ids)
-        top_n_ids = torch.topk(-A, self.k_sample, dim=1)[1][-1]
-        top_n = torch.index_select(h, dim=0, index=top_n_ids)
-        p_targets = self.create_positive_targets(self.k_sample, device)
-        n_targets = self.create_negative_targets(self.k_sample, device)
+        top_p_ids = torch.topk(A, self.k_sample)[1][-1]  # 使用torch.topk函数找到A中的前self.k_sample个最大值的索引。
+        top_p = torch.index_select(h, dim=0, index=top_p_ids)  # 根据top_p_ids索引从h中选择对应的元素，得到正样本的特征。
+        top_n_ids = torch.topk(-A, self.k_sample, dim=1)[1][-1]  # 找到A中的前self.k_sample个最小值的索引，这里使用-A是为了找到最小的元素。
+        top_n = torch.index_select(h, dim=0, index=top_n_ids)  # 根据top_n_ids索引从h中选择对应的元素，得到负样本的特征。
+        p_targets = self.create_positive_targets(self.k_sample, device)  # 创建正样本的目标张量，所有元素都是1。
+        n_targets = self.create_negative_targets(self.k_sample, device)  # 创建负样本的目标张量，所有元素都是0。
 
-        all_targets = torch.cat([p_targets, n_targets], dim=0)
-        all_instances = torch.cat([top_p, top_n], dim=0)
-        logits = classifier(all_instances)
+        all_targets = torch.cat([p_targets, n_targets], dim=0)  # 目标张量 拼接
+        all_instances = torch.cat([top_p, top_n], dim=0)  # 特征张量 拼接
+        logits = classifier(all_instances)  # 得到分类的原始输出
         all_preds = torch.topk(logits, 1, dim=1)[1].squeeze(1)
-        instance_loss = self.instance_loss_fn(logits, all_targets)
+        instance_loss = self.instance_loss_fn(logits, all_targets)  # 计算损失
         return instance_loss, all_preds, all_targets
     
     # instance-level evaluation for out-of-the-class attention branch
@@ -156,12 +153,12 @@ class CLAM_SB(nn.Module):
 
     def forward(self, h, label=None, instance_eval=False, return_features=False, attention_only=False):
         device = h.device
-        A, h = self.attention_net(h)  # NxK        
-        A = torch.transpose(A, 1, 0)  # KxN
+        A, h = self.attention_net(h)  # NxK       h -> torch.Size([h.shape[0], 2048])  A -> torch.Size([h.shape[0], 1])  h -> torch.Size([h.shape[0], 512])
+        A = torch.transpose(A, 1, 0)  # KxN   A -> torch.Size([1, h.shape[0]])
         if attention_only:
             return A
         A_raw = A
-        A = F.softmax(A, dim=1)  # softmax over N
+        A = F.softmax(A, dim=1)  # softmax over N  A -> torch.Size([1, h.shape[0]])
 
         if instance_eval:
             total_inst_loss = 0.0
@@ -187,7 +184,7 @@ class CLAM_SB(nn.Module):
             if self.subtyping:
                 total_inst_loss /= len(self.instance_classifiers)
                 
-        M = torch.mm(A, h) 
+        M = torch.mm(A, h)  # M -> torch.Size([1, 512])
         logits = self.classifiers(M)
         Y_hat = torch.topk(logits, 1, dim=1)[1]
         Y_prob = F.softmax(logits, dim=1)

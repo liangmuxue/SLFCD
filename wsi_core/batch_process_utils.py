@@ -14,16 +14,13 @@ args:
 	patch_params (dict): patching paramters
 	use_heatmap_args (bool): whether to include heatmap arguments such as ROI coordinates
 '''
-def initialize_df(slides, seg_params, filter_params, vis_params, patch_params, 
-	use_heatmap_args=False, save_patches=False):
-
+def initialize_df(slides, seg_params, filter_params, vis_params, patch_params, use_heatmap_args=False, save_patches=False):
 	total = len(slides)
 	if isinstance(slides, pd.DataFrame):
 		slide_ids = slides.slide_id.values
 	else:
 		slide_ids = slides
 	default_df_dict = {'slide_id': slide_ids, 'process': np.full((total), 1, dtype=np.uint8)}
-
 	# initiate empty labels in case not provided
 	if use_heatmap_args:
 		default_df_dict.update({'label': np.full((total), -1)})
@@ -80,3 +77,15 @@ def initialize_df(slides, seg_params, filter_params, vis_params, patch_params,
 		slides = pd.DataFrame(default_df_dict)
 	
 	return slides
+
+
+
+
+
+
+
+
+
+
+
+

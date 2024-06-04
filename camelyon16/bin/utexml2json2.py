@@ -10,7 +10,7 @@ from camelyon16.data.annotation import UteFormatter
 parser = argparse.ArgumentParser(description='Convert Camelyon16 xml format to'
                                  'internal json format')
 
-parser.add_argument('--source', type=str,
+parser.add_argument('--source', type=str, default="/home/bavon/datasets/wsi/ais", 
                     help='path to folder containing raw wsi image files')
 
 def run(args):
@@ -27,6 +27,7 @@ def run(args):
         json_file_path = os.path.join(json_path,json_file)
         xml_file_path = os.path.join(xml_path,file)
         UteFormatter().xml2json(xml_file_path, json_file_path)
+        print("process successsful: ", json_file_path, '->', json_file_path)
 
         
 def main():
@@ -34,6 +35,7 @@ def main():
 
     args = parser.parse_args()
     run(args)
+    print("process successful!!!")
 
 
 if __name__ == '__main__':

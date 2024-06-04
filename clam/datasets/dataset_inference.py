@@ -48,7 +48,7 @@ class Whole_Slide_Bag_Infer(Whole_Slide_Bag_COMBINE):
         # 处理单独文件
         svs_file = os.path.join(file_path,"data","{}.svs".format(single_name))
         patch_path = os.path.join(file_path,"patches_level{}".format(patch_level))
-        patch_file = os.path.join(file_path, patch_path, single_name + ".h5")    
+        patch_file = os.path.join(patch_path, single_name + ".h5")   
         wsi_file = os.path.join(file_path, "data", svs_file)    
         wsi_data = openslide.open_slide(wsi_file)
         scale = wsi_data.level_downsamples[patch_level]
@@ -61,6 +61,7 @@ class Whole_Slide_Bag_Infer(Whole_Slide_Bag_COMBINE):
             patch_coords = np.array(f['coords'])
             patches_bag_list = []
             # 对每个patch坐标进行处理
+            print("len:{},patch_level:{}".format(patch_coords.shape[0],patch_level))
             for i in range(patch_coords.shape[0]):
                 coord = patch_coords[i]           
                 coord = coord//scale

@@ -224,20 +224,18 @@ class UteFormatter(object):
             outjson: string, path to the output json format
         """
         root = ET.parse(inxml).getroot()
-        annotations_A = \
-            root.findall('./Annotations/Annotation[@PartOfGroup="A"]')
-        annotations_B = \
-            root.findall('./Annotations/Annotation[@PartOfGroup="B"]')
-        annotations_C = \
-            root.findall('./Annotations/Annotation[@PartOfGroup="C"]')
-        annotations_D = \
-            root.findall('./Annotations/Annotation[@PartOfGroup="D"]')
-        annotations_E = \
-            root.findall('./Annotations/Annotation[@PartOfGroup="E"]')
-        annotations_F = \
-            root.findall('./Annotations/Annotation[@PartOfGroup="F"]')            
+        annotations_A =  root.findall('./Annotations/Annotation[@PartOfGroup="A"]')
+        annotations_B =  root.findall('./Annotations/Annotation[@PartOfGroup="B"]')
+        annotations_C =  root.findall('./Annotations/Annotation[@PartOfGroup="C"]')
+        annotations_D =  root.findall('./Annotations/Annotation[@PartOfGroup="D"]')
+        annotations_E =  root.findall('./Annotations/Annotation[@PartOfGroup="E"]')
+        annotations_F =  root.findall('./Annotations/Annotation[@PartOfGroup="F"]')        
+        annotations_G =  root.findall('./Annotations/Annotation[@PartOfGroup="G"]')  
+        annotations_H =  root.findall('./Annotations/Annotation[@PartOfGroup="H"]')  
+        annotations_I =  root.findall('./Annotations/Annotation[@PartOfGroup="I"]')    
+        annotations_J =  root.findall('./Annotations/Annotation[@PartOfGroup="J"]')    
         annotations_negative = []
-        annotations_positive = annotations_A + annotations_B + annotations_C + annotations_D + annotations_E + annotations_F
+        annotations_positive = annotations_A + annotations_B + annotations_C + annotations_D + annotations_E + annotations_F + annotations_G + annotations_H + annotations_I + annotations_J
 
         json_dict = {}
         json_dict['positive'] = []

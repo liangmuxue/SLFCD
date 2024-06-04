@@ -35,16 +35,16 @@ from custom.model.cbam_ext import ResidualNet
 
 sys.path.append(os.path.dirname(os.path.abspath(__file__)) + '/../../')
 
-device = torch.device('cuda:0')
+device = torch.device('cuda:1')
 # device = torch.device('cpu')
 
 from utils.vis import vis_data,visdom_data
 from visdom import Visdom
 
-viz_tumor_train = Visdom(env="tumor_train", port=8098)
-viz_tumor_valid = Visdom(env="tumor_valid", port=8098)
-viz_normal_train = Visdom(env="normal_train", port=8098)
-viz_normal_valid = Visdom(env="normal_valid", port=8098)
+viz_tumor_train = Visdom(env="tumor_train")  # , port=8098
+viz_tumor_valid = Visdom(env="tumor_valid")
+viz_normal_train = Visdom(env="normal_train")
+viz_normal_valid = Visdom(env="normal_valid")
 
 
 def chose_model(model_name,mode=None,image_size=512):
@@ -90,7 +90,7 @@ class CoolSystem(pl.LightningModule):
             ], lr=self.params.lr, momentum=self.params.momentum)
         optimizer = torch.optim.Adam([
                 {'params': self.model.parameters()},
-            ],  weight_decay=1e-4,lr=self.params.lr,capturable=True)
+            ],  weight_decay=1e-4,lr=self.params.lr)
         # optimizer.param_groups[0]['capturable'] = True
         scheduler = torch.optim.lr_scheduler.StepLR(optimizer=optimizer,gamma=0.3, step_size=5)
         scheduler = torch.optim.lr_scheduler.CyclicLR(optimizer=optimizer,cycle_momentum=False,base_lr=1e-5,max_lr=1e-4,step_size_up=20)
@@ -123,7 +123,7 @@ class CoolSystem(pl.LightningModule):
         for index in tumor_index:
             if np.random.randint(1,50)==3:
                 self._viz_sample(img_ori, y, index, all_labes=all_labes,viz=viz_tumor_train)
-                
+        
         normal_index = torch.where(y==0)[0]    
         for index in normal_index:
             if np.random.randint(1,50)==3:
@@ -162,7 +162,7 @@ class CoolSystem(pl.LightningModule):
             if np.random.randint(1,50)==3:
                 corr = (predicts[index]==1)
                 self._viz_sample(img_ori, y, index, all_labes=all_labes,viz=viz_tumor_valid,corr=corr)
-                
+        
         normal_index = torch.where(y==0)[0]    
         for index in normal_index:
             if np.random.randint(1,50)==3:
@@ -298,7 +298,11 @@ def get_last_ck_file(checkpoint_path):
     return list[-1]
 
 def main(hparams,device_ids=None):
-    checkpoint_path = os.path.join(hparams.work_dir,"checkpoints",hparams.model_name)
+    checkpoint_path = os.path.join("../", hparams.work_dir,"checkpoints",hparams.model_name)
+    if not os.path.exists(checkpoint_path):
+        os.makedirs(checkpoint_path)
+    print("checkpoint_path: ", checkpoint_path)
+    
     filename = 'slfcd-{epoch:02d}-{val_loss:.2f}'
     
     checkpoint_callback = ModelCheckpoint(
@@ -309,11 +313,15 @@ def main(hparams,device_ids=None):
         save_top_k=-1,
         auto_insert_metric_name=False
     ) 
+    
     logger_name = "app_log"
     model_logger = (
         pl_loggers.TensorBoardLogger(save_dir=hparams.work_dir, name=logger_name, version=hparams.model_name)
-    )             
-    log_path = os.path.join(hparams.work_dir,logger_name,hparams.model_name) 
+    )         
+        
+    log_path = os.path.join("../", hparams.work_dir,logger_name,hparams.model_name) 
+    print("log_path: ", log_path)
+    
     if hparams.load_weight:
         file_name = get_last_ck_file(checkpoint_path)
         checkpoint_path_file = "{}/{}".format(checkpoint_path,file_name)
@@ -332,15 +340,13 @@ def main(hparams,device_ids=None):
     else:
         if os.path.exists(checkpoint_path):
             shutil.rmtree(checkpoint_path)
-        # os.mkdir(checkpoint_path)
-        os.makedirs(checkpoint_path, exist_ok=True)
+        os.mkdir(checkpoint_path)
         if os.path.exists(log_path):
             shutil.rmtree(log_path)
-        # os.mkdir(log_path)
-        os.makedirs(log_path, exist_ok=True)
+        os.mkdir(log_path)
         
         model = CoolSystem(hparams,device=device)
-        # model = model.to(device)
+        model = model.to(device)
         # data_summarize(model.val_dataloader())
         trainer = pl.Trainer(
             max_epochs=hparams.epochs,
@@ -373,15 +379,16 @@ def data_summarize(dataloader):
             if viz_number_normal<10:
                 viz_number_normal += 1                
                 visdom_data(img_ori,[], title="normal_{}".format(index),viz=viz_normal_valid)
-    
+            
+
     label_stat = np.array(label_stat)
     
     print("label_stat 1:{},2:{},3:{}".format(np.sum(label_stat==1),np.sum(label_stat==2),np.sum(label_stat==3)))
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Train model')
-    parser.add_argument('--device_ids', default='0', type=str, help='choose device')
-    parser.add_argument('--mode', default='lsil', type=str, help='choose type')
+    parser.add_argument('--device_ids', default='1', type=str, help='choose device')
+    parser.add_argument('--mode', default='ais', type=str, help='choose type')
     args = parser.parse_args()
     device_ids = args.device_ids
       
@@ -391,9 +398,13 @@ if __name__ == '__main__':
         cnn_path = 'custom/configs/config_hsil_liang.json'
     if args.mode=="lsil":
         cnn_path = 'custom/configs/config_lsil_liang.json'        
+    if args.mode=="ais":
+        cnn_path = 'configs/config_ais_lc.json'    
     with open(cnn_path, 'r') as f:
         args = json.load(f) 
     hyperparams = Namespace(**args)    
+    print("hyperparams: ", hyperparams)
     main(hyperparams,device_ids=device_ids)
+    print('process success!!!')
     
     
