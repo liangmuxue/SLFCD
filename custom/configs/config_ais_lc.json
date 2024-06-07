@@ -19,6 +19,7 @@
   "num_workers": 6,
   "load_weight": false,
   "model_name" : "ais_cbam_with_feature",
-  "work_dir": "results"
+  "work_dir": "/home/bavon/project/SLFCD/SLFCD/results",
+  "save_slide": false
 }
 

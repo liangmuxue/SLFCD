@@ -1,18 +1,16 @@
 import numpy as np
-
 import torch
 from clam.models.model_mil import MIL_fc, MIL_fc_mc
 from clam.models.model_clam import CLAM_SB, CLAM_MB
-import os
 import pandas as pd
-from clam.utils.utils import calculate_error,print_network,get_optim,get_simple_loader
+from clam.utils.utils import calculate_error, get_simple_loader
 from clam.utils.core_utils import Accuracy_Logger
 from sklearn.metrics import roc_auc_score, roc_curve, auc
 from sklearn.preprocessing import label_binarize
 
 
 def initiate_model(args, ckpt_path):
-    print('Init Model')    
+    device = torch.device("cuda:1" if torch.cuda.is_available() else "cpu")
     model_dict = {"dropout": args.drop_out, 'n_classes': args.n_classes}
     
     if args.model_size is not None and args.model_type in ['clam_sb', 'clam_mb']:
@@ -28,9 +26,9 @@ def initiate_model(args, ckpt_path):
         else:
             model = MIL_fc(**model_dict)
 
-    print_network(model)
+    # print_network(model)
 
-    ckpt = torch.load(ckpt_path)
+    ckpt = torch.load(ckpt_path, map_location=device)
     ckpt_clean = {}
     for key in ckpt.keys():
         if 'instance_loss_fn' in key:

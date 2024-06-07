@@ -153,8 +153,8 @@ class CLAM_SB(nn.Module):
 
     def forward(self, h, label=None, instance_eval=False, return_features=False, attention_only=False):
         device = h.device
-        A, h = self.attention_net(h)  # NxK       h -> torch.Size([h.shape[0], 2048])  A -> torch.Size([h.shape[0], 1])  h -> torch.Size([h.shape[0], 512])
-        A = torch.transpose(A, 1, 0)  # KxN   A -> torch.Size([1, h.shape[0]])
+        A, h = self.attention_net(h)  # NxK  h -> torch.Size([h.shape[0], 2048])  A -> torch.Size([h.shape[0], 1])  h -> torch.Size([h.shape[0], 512])
+        A = torch.transpose(A, 1, 0)  # KxN  A -> torch.Size([1, h.shape[0]])
         if attention_only:
             return A
         A_raw = A

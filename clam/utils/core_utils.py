@@ -158,7 +158,7 @@ def train(datasets, cur, args):
             raise NotImplementedError
         
         model_list = [os.path.join(args.results_dir, i) for i in os.listdir(args.results_dir) if 'pt' in i]
-        if list:
+        if model_list:
             model.load_state_dict(torch.load(model_list[-1], map_location=device))
             print("\nLoad pretrained model: ", model_list[-1])
 

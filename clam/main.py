@@ -1,60 +1,34 @@
 from __future__ import print_function
 
 import argparse
-import pdb
 import os
-import math
 
-# internal imports
-from clam.utils.file_utils import save_pkl, load_pkl
+from clam.utils.file_utils import save_pkl
 from clam.utils.core_utils import train
 from clam.datasets.dataset_generic import Combine_MIL_Dataset
 
 import torch
-from torch.utils.data import DataLoader, sampler
-import torch.nn as nn
-import torch.nn.functional as F
-
 import pandas as pd
 import numpy as np
+
 os.environ['CUDA_VISIBLE_DEVICES'] = '1'
 
+
 def return_splits(data_dir, type='ais'):
-    train_dataset = Combine_MIL_Dataset(
-        data_dir=data_dir,
-        mode="train",
-        shuffle=False,
-        seed=args.seed,
-        print_info=True,
-        patient_strat=False,
-        type=type,
-        ignore=[])
-    valid_dataset = Combine_MIL_Dataset(
-        data_dir=data_dir,
-        mode="valid",
-        shuffle=False,
-        seed=args.seed,
-        print_info=True,
-        patient_strat=False,
-        type=type,
-        ignore=[])
-    test_dataset = Combine_MIL_Dataset(
-        data_dir=data_dir,
-        mode="test",
-        shuffle=False,
-        seed=args.seed,
-        print_info=True,
-        patient_strat=False,
-        type=type,
-        ignore=[])
+    train_dataset = Combine_MIL_Dataset(data_dir=data_dir, mode="train", shuffle=False, seed=args.seed,
+                                        print_info=True, patient_strat=False, type=type, ignore=[])
+    valid_dataset = Combine_MIL_Dataset(data_dir=data_dir, mode="valid", shuffle=False, seed=args.seed,
+                                        print_info=True, patient_strat=False, type=type, ignore=[])
+    test_dataset = Combine_MIL_Dataset(data_dir=data_dir, mode="test", shuffle=False, seed=args.seed,
+                                       print_info=True, patient_strat=False, type=type, ignore=[])
     return train_dataset, valid_dataset, test_dataset
 
 
 def main(args):
-    # create results directory if necessary
     if not os.path.isdir(args.results_dir):
         os.mkdir(args.results_dir)
 
+    # k折交叉
     if args.k_start == -1:
         start = 0
     else:
@@ -64,10 +38,7 @@ def main(args):
     else:
         end = args.k_end
 
-    all_test_auc = []
-    all_val_auc = []
-    all_test_acc = []
-    all_val_acc = []
+    all_test_auc, all_val_auc, all_test_acc, all_val_acc = [], [], [], []
     folds = np.arange(start, end)
     for i in folds:
         seed_torch(args.seed)
@@ -130,8 +101,9 @@ parser.add_argument('--weighted_sample', action='store_true', default=False,
                     help='enable weighted sampling (使用加权抽样)')
 parser.add_argument('--model_size', type=str, choices=['small', 'big'], default='small',
                     help='size of model, does not affect mil')
-parser.add_argument('--task', type=str, choices=['task_1_tumor_vs_normal', 'task_2_tumor_subtyping'], default='task_1_tumor_vs_normal')
-### CLAM specific options
+parser.add_argument('--task', type=str, choices=['task_1_tumor_vs_normal', 'task_2_tumor_subtyping'],
+                    default='task_1_tumor_vs_normal')
+# CLAM specific options
 parser.add_argument('--no_inst_cluster', action='store_true', default=False,
                     help='disable instance-level clustering (禁用实例级群集)')
 parser.add_argument('--inst_loss', type=str, choices=['svm', 'ce', None], default=None,
@@ -196,8 +168,8 @@ if __name__ == "__main__":
     if not os.path.isdir(args.results_dir):
         os.mkdir(args.results_dir)
 
-    # args.results_dir = os.path.join("..", args.results_dir, str(args.exp_code) + '_s{}'.format(args.seed))
-    args.results_dir = os.path.join("..", args.results_dir, str(args.exp_code), args.task + '_CLAM_50_' + args.type +'_s{}'.format(args.seed))
+    args.results_dir = os.path.join("..", args.results_dir, str(args.exp_code),
+                                    args.task + '_CLAM_50_' + args.type + '_s{}'.format(args.seed))
     if not os.path.isdir(args.results_dir):
         os.mkdir(args.results_dir)
 
@@ -205,7 +177,5 @@ if __name__ == "__main__":
         print(settings, file=f)
     f.close()
 
-    results = main(args)
-    print("finished!")
-    print("end script")
-    print("process successful!!!") 
+    main(args)
+    print("process successful!!!")

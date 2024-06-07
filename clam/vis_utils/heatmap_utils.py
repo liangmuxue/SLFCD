@@ -1,19 +1,9 @@
-import numpy as np
-import torch
-import torch.nn as nn
-import torch.nn.functional as F
-import pdb
 import os
-import pandas as pd
-from clam.utils.utils import get_simple_loader,print_network,get_optim,get_split_loader
-from PIL import Image
-from math import floor
-import matplotlib.pyplot as plt
+import torch
+from tqdm import tqdm
+from clam.utils.utils import get_simple_loader
 from clam.datasets.wsi_dataset import Wsi_Region
-import h5py
 from wsi_core.WholeSlideImage import WholeSlideImage
-from scipy.stats import percentileofscore
-import math
 from utils.file_utils import save_hdf5
 from scipy.stats import percentileofscore
 
@@ -22,17 +12,19 @@ def score2percentile(score, ref):
     percentile = percentileofscore(ref.flatten(), score)
     return percentile
 
-def drawHeatmap(scores, coords, slide_path=None, wsi_object=None, vis_level = -1, **kwargs):
+
+def drawHeatmap(scores, coords, slide_path=None, wsi_object=None, vis_level=-1, k=15, **kwargs):
     if wsi_object is None:
         wsi_object = WholeSlideImage(slide_path)
         print(wsi_object.name)
-    
+
     wsi = wsi_object.getOpenSlide()
     if vis_level < 0:
         vis_level = wsi.get_best_level_for_downsample(32)
-    
-    heatmap = wsi_object.visHeatmap(scores=scores, coords=coords, vis_level=vis_level, **kwargs)
+
+    heatmap = wsi_object.visHeatmap(scores=scores, coords=coords, vis_level=vis_level, k=k, **kwargs)
     return heatmap
+
 
 def initialize_wsi(wsi_path, seg_mask_path=None, seg_params=None, filter_params=None):
     wsi_object = WholeSlideImage(wsi_path)
@@ -44,47 +36,19 @@ def initialize_wsi(wsi_path, seg_mask_path=None, seg_params=None, filter_params=
     wsi_object.saveSegmentation(seg_mask_path)
     return wsi_object
 
-def compute_from_patches(wsi_object, clam_pred=None, model=None, feature_extractor=None, batch_size=512,  
-    attn_save_path=None, ref_scores=None, feat_save_path=None,device=None, **wsi_kwargs):    
-    top_left = wsi_kwargs['top_left']
-    bot_right = wsi_kwargs['bot_right']
-    patch_size = wsi_kwargs['patch_size']
-    
+
+def compute_from_patches(wsi_object, feature_extractor=None, batch_size=512, feat_save_path=None, device=None, **wsi_kwargs):
     roi_dataset = Wsi_Region(wsi_object, **wsi_kwargs)
     roi_loader = get_simple_loader(roi_dataset, batch_size=batch_size, num_workers=8)
-    print('total number of patches to process: ', len(roi_dataset))
-    num_batches = len(roi_loader)
-    print('number of batches: ', len(roi_loader))
     mode = "w"
-    for idx, (roi, coords) in enumerate(roi_loader):
-        roi = roi.to(device)
-        coords = coords.numpy()
-        
-        with torch.no_grad():
+    with torch.no_grad():
+        for idx, (roi, coords) in tqdm(enumerate(roi_loader), total=len(roi_loader), desc=f"process one {os.path.splitext(feat_save_path)[-1][:-3]}"):
+            roi = roi.to(device)
+            coords = coords.numpy()
+
             features = feature_extractor(roi)
 
-            if attn_save_path is not None:
-                features = features[:,:,0,0]
-                A = model(features, attention_only=True)
-           
-                if A.size(0) > 1: #CLAM multi-branch attention
-                    A = A[clam_pred]
-
-                A = A.view(-1, 1).cpu().numpy()
-
-                if ref_scores is not None:
-                    for score_idx in range(len(A)):
-                        A[score_idx] = score2percentile(A[score_idx], ref_scores)
-
-                asset_dict = {'attention_scores': A, 'coords': coords}
-                save_path = save_hdf5(attn_save_path, asset_dict, mode=mode)
-    
-        if idx % math.ceil(num_batches * 0.05) == 0:
-            print('processed {} / {}'.format(idx, num_batches))
-
-        if feat_save_path is not None:
             asset_dict = {'features': features.cpu().numpy(), 'coords': coords}
             save_hdf5(feat_save_path, asset_dict, mode=mode)
-
-        mode = "a"
-    return attn_save_path, feat_save_path, wsi_object
+            mode = "a"
+    return wsi_object
