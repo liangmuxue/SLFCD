@@ -1,11 +1,14 @@
 from __future__ import print_function, division
 import os
+import time
+
 import numpy as np
 import cv2
 import openslide
 from torch.utils.data import Dataset
 from torchvision import transforms
 import h5py
+from tqdm import tqdm
 
 from utils.constance import get_label_cate_num
 
@@ -31,8 +34,9 @@ def eval_transforms(pretrained=False):
 
 class Whole_Slide_Bag_COMBINE(Dataset):
     """Custom slide dataset,use multiple wsi file,in which has multiple patches"""
+
     def __init__(self, file_path, wsi_path, mask_path, patch_path=None, split_data=None, custom_downsample=1,
-                 target_patch_size=-1, patch_level=0, patch_size=256, mode="lsil", transform=None, work_type="train", 
+                 target_patch_size=-1, patch_level=0, patch_size=256, mode="lsil", transform=None, work_type="train",
                  save_slide=False):
         """
         Args:
@@ -54,7 +58,7 @@ class Whole_Slide_Bag_COMBINE(Dataset):
         pathces_len = 0
         labels = []
         # 处理非标注数据，遍历所有h5数据，存储相关坐标
-        for svs_file in split_data:
+        for svs_file in tqdm(split_data, total=len(split_data), desc=f"process data {work_type}"):
             single_name = svs_file.split(".")[0]
             patch_file = os.path.join(file_path, patch_path, single_name + ".h5")
             wsi_file = os.path.join(file_path, "data", svs_file)
@@ -62,7 +66,7 @@ class Whole_Slide_Bag_COMBINE(Dataset):
             scale = wsi_data.level_downsamples[patch_level]
             with h5py.File(patch_file, "r") as f:
                 patch_coords = np.array(f['coords'])
-                # 存储标注框信息，形状为: (patch数量,最大长度,3)
+                # 存储标注框信息，形状为: (patch数量,最大长度,3)  # 488 489
                 annotations = np.array(f["annotations"])
                 label_data = np.array(f["label_data"])
                 # 对应每个patch，包含的标注框实际数量
@@ -77,6 +81,14 @@ class Whole_Slide_Bag_COMBINE(Dataset):
                     target_patch_size = (patch_size // custom_downsample,) * 2
 
                 has_anno_flag = np.zeros(patch_coords.shape[0])
+                orig_img = wsi_data.read_region((0, 0), self.patch_level,
+                                                wsi_data.level_dimensions[self.patch_level]).convert("RGB")
+                orig_img = cv2.cvtColor(np.array(orig_img), cv2.COLOR_RGB2BGR)
+                orig_img_save = orig_img.copy()
+                
+                if not os.path.exists(os.path.join(self.mask_path, single_name)):
+                    os.makedirs(os.path.join(self.mask_path, single_name))
+                            
                 # 对每个patch坐标进行处理，包括设置缩放等
                 for i in range(patch_coords.shape[0]):
                     # 根据patch对应label数据，设置类别
@@ -87,6 +99,15 @@ class Whole_Slide_Bag_COMBINE(Dataset):
                         patches_type = "tumor"
                         # 设置当前切片是否包含标注
                         has_anno_flag[i] = 1
+                        # if not os.path.exists(os.path.join(self.mask_path, single_name, "1")):
+                        #     os.makedirs(os.path.join(self.mask_path, single_name, "1"))
+                        # img = orig_img_save[coord[1]: coord[1] + self.patch_size,
+                        #                     coord[0]: coord[0] + self.patch_size]
+                        # cv2.imwrite(os.path.join(self.mask_path, single_name, "1", f"{coord}.jpg"), img)
+                        temp_coord = (np.array(coord) / scale).astype(np.int16)
+                        cv2.putText(orig_img, "1",
+                                    (int(temp_coord[0] + patch_size / 2), int(temp_coord[1] + patch_size / 2)),
+                                    cv2.FONT_HERSHEY_SIMPLEX, 2, color=(0, 0, 0), thickness=10)
                     else:
                         patches_type = "normal"
                         # 如果当前属于未标注，则加入数据集合
@@ -95,6 +116,15 @@ class Whole_Slide_Bag_COMBINE(Dataset):
                         patches_bag["anno_coord"] = patches_bag["coord"]
                         labels.append(0)
                         patches_bag_list.append(patches_bag)
+                        # if not os.path.exists(os.path.join(self.mask_path, single_name, "0")):
+                        #     os.makedirs(os.path.join(self.mask_path, single_name, "0"))
+                        # img = orig_img_save[coord[1]: coord[1] + self.patch_size,
+                        #                     coord[0]: coord[0] + self.patch_size]
+                        # cv2.imwrite(os.path.join(self.mask_path, single_name, "0", f"{coord}.jpg"), img)
+                        temp_coord = (np.array(coord) / scale).astype(np.int16)
+                        cv2.putText(orig_img, "0",
+                                    (int(temp_coord[0] + patch_size / 2), int(temp_coord[1] + patch_size / 2)),
+                                    cv2.FONT_HERSHEY_SIMPLEX, 1, color=(0, 0, 255), thickness=10)
 
                     # 遍历当前patch下的所有标注候选框，展开为对应记录
                     box_len = boxes_len[i]
@@ -102,7 +132,7 @@ class Whole_Slide_Bag_COMBINE(Dataset):
                         patches_bag = {"type": patches_type}
                         box = annotations[i, j]
                         # 标签代码转为标签序号
-                        patches_bag["label"] = get_label_cate_num(box[-1], mode=mode)
+                        patches_bag["label"] = get_label_cate_num(box[-2], mode=mode)
                         patches_bag["scale"] = scale
                         patches_bag["name"] = single_name
                         patches_bag["coord"] = (np.array(coord) / scale).astype(np.int16)
@@ -112,12 +142,13 @@ class Whole_Slide_Bag_COMBINE(Dataset):
                         patches_bag["anno_coord"] = box[:-1].astype(np.int16)
                         patches_bag_list.append(patches_bag)
                         labels.append(patches_bag["label"])
-                        if save_slide:
-                            # 保存病症图片
-                            img = wsi_data.read_region((patches_bag["anno_coord"] * scale).astype(np.int16), self.patch_level, (self.patch_size, self.patch_size)).convert('RGB')
-                            if not os.path.exists(os.path.join(self.mask_path, single_name)):
-                                os.makedirs(os.path.join(self.mask_path, single_name))
-                            img.save(os.path.join(self.mask_path, single_name, f"{j}.png"))
+
+                cv2.imwrite(f"{self.mask_path}/{single_name}/{single_name}.jpg", orig_img)
+
+                # patches_bag_list = patches_bag_list[:int(len(patches_bag_list) / 2)]
+                # labels = labels[:int(len(labels) / 2)]
+                # end_time = time.time()
+                # print(f"{svs_file} process time: {end_time - start_time} sed")
 
         labels = np.array(labels)
         no_anno_index = np.where(labels == 0)[0]
@@ -163,6 +194,7 @@ class Whole_Slide_Bag_COMBINE(Dataset):
 
 class Whole_Slide_Det(Whole_Slide_Bag_COMBINE):
     """针对目标检测模式的WSI数据集"""
+
     def __init__(self, file_path, wsi_path, mask_path, patch_path=None, split_data=None, custom_downsample=1,
                  target_patch_size=-1, patch_level=0, patch_size=256, mode="lsil", work_type="train", transform=None):
         """

@@ -1,5 +1,4 @@
 import os
-import time
 from io import BytesIO
 from xml.dom import minidom
 import multiprocessing as mp
@@ -7,7 +6,6 @@ import cv2
 import matplotlib.pyplot as plt
 import numpy as np
 import openslide
-from PIL import Image
 import math
 from wsi_core.wsi_utils import savePatchIter_bag_hdf5, initialize_hdf5_bag, save_hdf5, \
     screen_coords, isBlackPatch, isWhitePatch, to_percentiles
@@ -15,6 +13,8 @@ from wsi_core.util_classes import isInContourV1, isInContourV2, isInContourV3_Ea
     Contour_Checking_fn
 from utils.file_utils import load_pkl, save_pkl
 from PIL import Image, ImageDraw, ImageFont
+from segmodel.segone import piplineone
+
 
 Image.MAX_IMAGE_PIXELS = 933120000
 
@@ -41,6 +41,7 @@ class WholeSlideImage(object):
         """
             初始化肿瘤轮廓，从 XML 文件中读取数据。
         """
+
         def _createContour(coord_list):
             """
                 将 XML 中的坐标列表转换成 numpy 数组。
@@ -51,6 +52,7 @@ class WholeSlideImage(object):
             """
             return np.array([[[int(float(coord.attributes['X'].value)),
                                int(float(coord.attributes['Y'].value))]] for coord in coord_list], dtype='int32')
+
         # 解析 XML 文件，创建一个文档对象
         xmldoc = minidom.parse(xml_path)
         # 从文档中提取所有的 'Annotation' 元素，并获取每个注释中的 'Coordinate' 子元素列表
@@ -64,6 +66,7 @@ class WholeSlideImage(object):
         """
             从文本文件中初始化肿瘤轮廓。
         """
+
         def _create_contours_from_dict(annot):
             """
                 根据注释字典创建轮廓列表。
@@ -117,6 +120,7 @@ class WholeSlideImage(object):
             自动识别并提取出图像中代表组织区域的部分
             通过HSV分割组织->中值阈值->二进制阈值
         """
+
         def _filter_contours(contours, hierarchy, filter_params):
             """
                 按面积过滤轮廓
@@ -171,7 +175,7 @@ class WholeSlideImage(object):
         # 应用中值模糊
         img_med = cv2.medianBlur(img_hsv[:, :, 1], mthresh)  # Apply median blurring
 
-        # 二值化阈值
+        # 二值化阈值（得到白色区域）
         if use_otsu:
             _, img_otsu = cv2.threshold(img_med, 0, sthresh_up, cv2.THRESH_OTSU + cv2.THRESH_BINARY)
         else:
@@ -180,7 +184,7 @@ class WholeSlideImage(object):
         # 形态学闭合
         if close > 0:
             kernel = np.ones((close, close), np.uint8)
-            img_otsu = cv2.morphologyEx(img_otsu, cv2.MORPH_CLOSE, kernel)
+            img_otsu = cv2.morphologyEx(img_otsu, cv2.MORPH_CLOSE, kernel)  # 执行形态学操作
 
         # 计算缩放比例和参考补丁尺寸
         scale = self.level_downsamples[seg_level]
@@ -191,6 +195,99 @@ class WholeSlideImage(object):
 
         # 查找轮廓
         contours, hierarchy = cv2.findContours(img_otsu, cv2.RETR_CCOMP, cv2.CHAIN_APPROX_NONE)
+        hierarchy = np.squeeze(hierarchy, axis=(0,))[:, 2:]
+        if filter_params:
+            # 根据参数过滤轮廓和孔洞
+            foreground_contours, hole_contours = _filter_contours(contours, hierarchy, filter_params)
+
+        # 匹配原始图像的尺寸
+        # 对每个轮廓中的每个点应用缩放因子，调整轮廓的尺寸
+        self.contours_tissue = self.scaleContourDim(foreground_contours, scale)
+        # 对每个轮廓中的每个孔洞的每个点应用缩放因子，从而调整孔洞的尺寸
+        self.holes_tissue = self.scaleHolesDim(hole_contours, scale)
+
+        # 确定最终的轮廓ID
+        if len(keep_ids) > 0:
+            contour_ids = set(keep_ids) - set(exclude_ids)
+        else:
+            contour_ids = set(np.arange(len(self.contours_tissue))) - set(exclude_ids)
+
+        # 根据轮廓ID过滤最终的轮廓列表
+        self.contours_tissue = [self.contours_tissue[i] for i in contour_ids]
+        # 根据轮廓ID过滤最终的孔洞列表
+        self.holes_tissue = [self.holes_tissue[i] for i in contour_ids]
+
+    def segmentTissue_new_model(self, seg_level=0, sthresh=20, sthresh_up=255, mthresh=7, close=0, use_otsu=False,
+                                filter_params={'a_t': 100}, ref_patch_size=512, exclude_ids=[], keep_ids=[],
+                                model=None, device='cpu'):
+        """
+            自动识别并提取出图像中代表组织区域的部分
+            通过HSV分割组织->中值阈值->二进制阈值
+        """
+
+        def _filter_contours(contours, hierarchy, filter_params):
+            """
+                按面积过滤轮廓
+            """
+            filtered = []
+
+            # 查找前景轮廓的索引 (parent == -1)
+            hierarchy_1 = np.flatnonzero(hierarchy[:, 1] == -1)
+            all_holes = []
+
+            # 循环 前景轮廓索引
+            for cont_idx in hierarchy_1:
+                # 真实轮廓
+                cont = contours[cont_idx]
+                # 包含在此轮廓中的孔的索引 (children of parent contour)
+                holes = np.flatnonzero(hierarchy[:, 1] == cont_idx)
+                # 获取面积 (includes holes)
+                a = cv2.contourArea(cont)
+                # 计算每个孔的轮廓面积
+                hole_areas = [cv2.contourArea(contours[hole_idx]) for hole_idx in holes]
+                # 前景轮廓区域的实际面积
+                a = a - np.array(hole_areas).sum()
+                if a == 0:
+                    continue
+                if tuple((filter_params['a_t'],)) < tuple((a,)):
+                    filtered.append(cont_idx)
+                    all_holes.append(holes)
+
+            foreground_contours = [contours[cont_idx] for cont_idx in filtered]
+
+            hole_contours = []
+
+            for hole_ids in all_holes:
+                unfiltered_holes = [contours[idx] for idx in hole_ids]
+                unfilered_holes = sorted(unfiltered_holes, key=cv2.contourArea, reverse=True)
+                # 按面积划分的最大孔
+                unfilered_holes = unfilered_holes[:filter_params['max_n_holes']]
+                filtered_holes = []
+
+                # 过滤 孔
+                for hole in unfilered_holes:
+                    if cv2.contourArea(hole) > filter_params['a_h']:
+                        filtered_holes.append(hole)
+
+                hole_contours.append(filtered_holes)
+
+            return foreground_contours, hole_contours
+
+        img = np.array(self.wsi.read_region((0, 0), seg_level, self.level_dim[seg_level]))
+        # 将 'RGB' 转换为 'BGR'
+        image = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
+
+        self.img_otsu = piplineone(model, image, device)
+
+        # 计算缩放比例和参考补丁尺寸
+        scale = self.level_downsamples[seg_level]
+        scaled_ref_patch_area = int(ref_patch_size ** 2 / (scale[0] * scale[1]))
+        filter_params = filter_params.copy()
+        filter_params['a_t'] = filter_params['a_t'] * scaled_ref_patch_area
+        filter_params['a_h'] = filter_params['a_h'] * scaled_ref_patch_area
+
+        # 查找轮廓
+        contours, hierarchy = cv2.findContours(self.img_otsu, cv2.RETR_CCOMP, cv2.CHAIN_APPROX_NONE)
         hierarchy = np.squeeze(hierarchy, axis=(0,))[:, 2:]
         if filter_params:
             # 根据参数过滤轮廓和孔洞
@@ -276,11 +373,13 @@ class WholeSlideImage(object):
 
                 # 绘制孔洞轮廓
                 for holes in self.holes_tissue:
-                    cv2.drawContours(img, self.scaleContourDim(holes, scale), -1, hole_color, line_thickness, lineType=cv2.LINE_8)
+                    cv2.drawContours(img, self.scaleContourDim(holes, scale), -1, hole_color, line_thickness,
+                                     lineType=cv2.LINE_8)
 
             # 显示 绘制注释轮廓
             if self.contours_tumor is not None and annot_display:
-                cv2.drawContours(img, self.scaleContourDim(self.contours_tumor, scale), -1, annot_color, line_thickness, lineType=cv2.LINE_8, offset=offset)
+                cv2.drawContours(img, self.scaleContourDim(self.contours_tumor, scale), -1, annot_color, line_thickness,
+                                 lineType=cv2.LINE_8, offset=offset)
 
         img = Image.fromarray(img)
         w, h = img.size
@@ -296,7 +395,8 @@ class WholeSlideImage(object):
 
         return img
 
-    def createPatches_bag_hdf5(self, save_path, patch_level=0, patch_size=256, step_size=256, save_coord=True, **kwargs):
+    def createPatches_bag_hdf5(self, save_path, patch_level=0, patch_size=256, step_size=256, save_coord=True,
+                               **kwargs):
         """
             为WSI创建一个包含图像块的HDF5文件。
             Args:
@@ -329,7 +429,8 @@ class WholeSlideImage(object):
 
         return self.hdf5_file
 
-    def _getPatchGenerator(self, cont, cont_idx, patch_level, save_path, patch_size=256, step_size=256, custom_downsample=1,
+    def _getPatchGenerator(self, cont, cont_idx, patch_level, save_path, patch_size=256, step_size=256,
+                           custom_downsample=1,
                            white_black=True, white_thresh=15, black_thresh=50, contour_fn='four_pt', use_padding=True):
         """
             生成一个图像块生成器，用于获取指定轮廓内的图像块。
@@ -418,7 +519,8 @@ class WholeSlideImage(object):
                               'y': y // (patch_downsample[1] * custom_downsample),
                               'cont_idx': cont_idx, 'patch_level': patch_level,
                               'downsample': self.level_downsamples[patch_level],
-                              'downsampled_level_dim': tuple(np.array(self.level_dim[patch_level]) // custom_downsample),
+                              'downsampled_level_dim': tuple(
+                                  np.array(self.level_dim[patch_level]) // custom_downsample),
                               'level_dim': self.level_dim[patch_level],
                               'patch_PIL': patch_PIL, 'name': self.name, 'save_path': save_path}
 
@@ -458,7 +560,7 @@ class WholeSlideImage(object):
         for downsample, dim in zip(self.wsi.level_downsamples, self.wsi.level_dimensions):
             estimated_downsample = (dim_0[0] / float(dim[0]), dim_0[1] / float(dim[1]))
             level_downsamples.append(estimated_downsample) if estimated_downsample != (
-            downsample, downsample) else level_downsamples.append((downsample, downsample))
+                downsample, downsample) else level_downsamples.append((downsample, downsample))
 
         return level_downsamples
 
@@ -491,8 +593,6 @@ class WholeSlideImage(object):
                     init = False
                 else:
                     save_hdf5(save_path_hdf5, asset_dict, mode='a')
-
-        return self.hdf5_file
 
     def process_contour(self, cont, contour_holes, patch_level, save_path, patch_size=256, step_size=256,
                         contour_fn='four_pt_easy', use_padding=True, top_left=None, bot_right=None):
@@ -579,7 +679,7 @@ class WholeSlideImage(object):
             num_workers = 4
         pool = mp.Pool(num_workers)
 
-        # 第o层级坐标
+        # 第0层级坐标
         iterable = [(coord, contour_holes, ref_patch_size[0], cont_check_fn) for coord in coord_candidates]
         # 确定一个给定的坐标点是否在指定的轮廓内，同时不在其关联的孔洞内（如果存在孔洞的话）
         results = pool.starmap(WholeSlideImage.process_coord_candidate, iterable)
@@ -669,16 +769,10 @@ class WholeSlideImage(object):
             region_size = self.level_dim[vis_level]
             top_left = (0, 0)
             bot_right = self.level_dim[0]
-            w, h = region_size
 
         # 根据缩放比例调整补丁大小和坐标
-        patch_size = np.ceil(np.array(patch_size) * np.array(scale)).astype(int)
+        # patch_size = np.ceil(np.array(patch_size) * np.array(scale)).astype(int)
         coords = np.ceil(coords * np.array(scale)).astype(int)
-
-        # print('\ncreating heatmap for: ')
-        # print('top_left: ', top_left, 'bot_right: ', bot_right)
-        # print('w: {}, h: {}'.format(w, h))
-        # print('scaled patch size: ', patch_size)
 
         # 归一化过滤分数
         if convert_to_percentiles:
@@ -687,14 +781,14 @@ class WholeSlideImage(object):
 
         # 绘制前 k 个区域在原图上方便查看
         original_image = self.wsi.read_region(top_left, vis_level, region_size).convert("RGB")
-        sorted_scores_and_coords = sorted(enumerate(scores), key=lambda x: x[1], reverse=True)[:k]
+        # sorted_scores_and_coords = sorted(enumerate(scores), key=lambda x: x[1], reverse=True)[:k]
         # 分离排序后的分数和坐标
-        sorted_scores = [score for idx, score in sorted_scores_and_coords]
-        sorted_coords = [coords[idx] for idx, score in sorted_scores_and_coords]
-        for idx, (s_coord, s_score) in enumerate(zip(sorted_coords, sorted_scores)):
+        # sorted_scores = [score for idx, score in sorted_scores_and_coords]
+        # sorted_coords = [coords[idx] for idx, score in sorted_scores_and_coords]
+        for idx, (s_coord, s_score) in enumerate(zip(coords, scores)):
             # 绘制矩形框和编号的坐标
             rectangle_coords = (tuple(s_coord), tuple(s_coord + patch_size))
-            original_image = self.draw_rectangle_with_text(original_image, rectangle_coords, str(idx + 1))
+            original_image = self.draw_rectangle_with_text(original_image, rectangle_coords, f'top: {idx + 1}')
 
         # 计算原始注意力得分的热图（在颜色图之前） 通过在重叠区域上累积分数
         # heatmap overlay: 跟踪热图每个像素的注意力得分
@@ -753,7 +847,7 @@ class WholeSlideImage(object):
 
         for idx in range(len(coords)):
             # if (idx + 1) % twenty_percent_chunk == 0:
-                # print('progress: {}/{}'.format(idx, len(coords)))
+            # print('progress: {}/{}'.format(idx, len(coords)))
 
             score = scores[idx]
             coord = coords[idx]
@@ -934,7 +1028,7 @@ class WholeSlideImage(object):
         draw = ImageDraw.Draw(image)
 
         # 绘制矩形框
-        draw.rectangle(coord, outline='red', width=2)
+        draw.rectangle(coord, outline='red', width=5)
 
         # 加载字体
         if font_path:

@@ -49,12 +49,9 @@ def align_xml_svs(file_path):
             print("copyfile fail,source:{} and target:{}".format(ori_xml_file, tar_xml_file), e)
 
 
-def build_data_csv(file_path, mode, split_rate=0.7):
+def build_data_csv(file_path, split_rate=0.7):
     """build train and valid list to csv"""
-    if mode == "w":
-        list_file = os.path.join(file_path, "process_list_autogen.csv")
-    else:
-        list_file = os.path.join(os.path.split(file_path)[0] + "\\norml", "process_list_autogen.csv")
+    list_file = os.path.join(file_path, "process_list_autogen.csv")
     file_list = pd.read_csv(list_file)
     total_file_number = file_list.shape[0]
 
@@ -73,8 +70,8 @@ def build_data_csv(file_path, mode, split_rate=0.7):
 
     train_df = pd.DataFrame(np.array(list_train), columns=['slide_id', 'label'])
     valid_df = pd.DataFrame(np.array(list_valid), columns=['slide_id', 'label'])
-    train_df.to_csv(train_file_path, mode=mode, index=False, sep=',')
-    valid_df.to_csv(valid_file_path, mode=mode, index=False, sep=',')
+    train_df.to_csv(train_file_path, index=False, sep=',')
+    valid_df.to_csv(valid_file_path, index=False, sep=',')
     print("split successful: ", train_file_path, ' and ', valid_file_path)
 
 
@@ -191,7 +188,7 @@ def patch_anno_img_lsil(xywh, mask_threhold, overlap_rate, is_edge_judge=False, 
 
     row = 0
     patch_regions = []
-    # Iterate rows and columns one by one,and crop image by patch size
+    # Iterate rows and columns one.py by one.py,and crop image by patch size
     while True:
         column = 0
         while True:
@@ -261,7 +258,7 @@ def patch_anno_img(xywh, patch_size=256, mask_threhold=0.9, mask_data=None, scal
 
     row = 0
     patch_regions = []
-    # Iterate rows and columns one by one,and crop image by patch size
+    # Iterate rows and columns one.py by one.py,and crop image by patch size
     while True:
         column = 0
         while True:
@@ -313,7 +310,7 @@ def build_annotation_patches(file_path, level=1, patch_size=64, patch_slide_size
     #                                     patch_slide_size=patch_slide_size, data_type=data_type,
     #                                     mask_threhold=mask_threhold)
 
-    Parallel(n_jobs=8)(delayed(build_annotation_patches_single)(file_path, xml_file, level=level, patch_size=patch_size,
+    Parallel(n_jobs=1)(delayed(build_annotation_patches_single)(file_path, xml_file, level=level, patch_size=patch_size,
                                                                 patch_slide_size=patch_slide_size, data_type=data_type,
                                                                 mask_threhold=mask_threhold, save_slide=save_slide
                                                                 ) for xml_file in os.listdir(xml_path))
@@ -348,17 +345,34 @@ def build_annotation_patches_single(file_path, xml_file, level=1, patch_size=64,
         anno_data = []
 
         # 获取肿瘤掩膜，人工标记的正标签（img）
-        tumor_mask = get_mask_tumor(wsi_file_path, json_file_path, level=level)
+        tumor_mask, mask_tumor_copy = get_mask_tumor(wsi_file_path, json_file_path, level=level)
         # 生成矩形候选框，人工标记的正标签 （label+xyxy）
         anno_regions = get_anno_box_datas(json_file_path, scale=scale)
+
+        if not os.path.exists(file_path + "/slide_img/" + file_name):
+            os.makedirs(file_path + "/slide_img/" + file_name)
+        cv2.imwrite(file_path + f"/slide_img/{file_name}/{file_name}_mask.jpg", mask_tumor_copy)
 
         anno_region_items = np.array([item["region"] + [item["code"]] for item in anno_regions])
         max_box_len = 0
 
+        orig_img = wsi.read_region((0, 0), level, wsi.level_dimensions[level]).convert("RGB")
+        orig_img = cv2.cvtColor(np.array(orig_img), cv2.COLOR_RGB2BGR)
+        orig_img_copy1 = orig_img.copy()
+        orig_img_copy2 = orig_img.copy()
+
         # 遍历每个剪裁区域，取得对应标注区域（非空白区域）
-        for i in range(coords.shape[0]):
+        shape = coords.shape
+        print('patch_file_path: ', patch_file_path, "shape: ", shape)
+        for i in range(shape[0]):
             anno_patches = []
             coord = coords[i]
+
+            cv2.putText(orig_img_copy1, "1",
+                        (int((coord[0] + patch_size / 2) / scale),
+                         int((coord[1] + patch_size / 2) / scale)),
+                         cv2.FONT_HERSHEY_SIMPLEX, 2, color=(0, 0, 0), thickness=10)
+
             has_anno_flag = False
             # 使用滑动窗方式，对patch以及周边进行候选扫描
             # slide_window_patches = create_slide_windows(coord,patch_size,slide_time)
@@ -366,22 +380,30 @@ def build_annotation_patches_single(file_path, xml_file, level=1, patch_size=64,
             for k in range(slide_time):
                 for j in range(slide_time):
                     # 计算当前滑动窗口的坐标
-                    coord_cur = [int((coord[0] + k * patch_slide_size)/scale), int((coord[1] + j * patch_slide_size)/scale)]
+                    coord_cur = [int((coord[0] + k * patch_slide_size) / scale),
+                                 int((coord[1] + j * patch_slide_size) / scale)]
                     # 判断当前滑动窗口是否包含标注区域，并获取标签
-                    match_flag, label = judge_region_match(coord_cur, patch_size, tumor_mask,
-                                                           anno_regions=anno_region_items,
-                                                           mask_threhold=mask_threhold)
+                    match_flag, label, conf, patch_masked_copy = judge_region_match_new(coord_cur, patch_size,
+                                                                                        tumor_mask,
+                                                                                        mask_tumor_copy,
+                                                                                        anno_regions=anno_region_items,
+                                                                                        mask_threhold=mask_threhold)
                     # 如果匹配，记录匹配的坐标点
                     if match_flag:
                         # 追加对应区域的标签信息
                         anno_patches.append(coord_cur + [label])
                         has_anno_flag = True
+
                         if save_slide:
-                            coord_big = [coord[0] + k * patch_slide_size, coord[1] + j * patch_slide_size]
-                            img = wsi.read_region(coord_big, level, (patch_size, patch_size)).convert("RGB")
-                            if not os.path.exists(file_path + "/slide_img/" + file_name):
-                                os.makedirs(file_path + "/slide_img/" + file_name)
-                            img.save(file_path + "/slide_img/" + file_name + "/" + f"{i}_{j}_{k}.png")
+                            if not os.path.exists(file_path + "/slide_img/" + file_name + "/mask"):
+                                os.makedirs(file_path + "/slide_img/" + file_name + "/mask")
+                            cv2.imwrite(
+                                file_path + "/slide_img/" + file_name + "/mask/" + f"{i}_{j}_{conf:.2f}_org.jpg",
+                                patch_masked_copy)
+
+                        cv2.rectangle(orig_img_copy2, coord_cur,
+                                      (coord_cur[0] + patch_size, coord_cur[1] + patch_size),
+                                      (0, 0, 255), 4)
 
             if i % 1000 == 0:
                 print("slide {} loop cont:{}".format(patch_file_path, i))
@@ -393,6 +415,11 @@ def build_annotation_patches_single(file_path, xml_file, level=1, patch_size=64,
             if has_anno_flag:
                 label_data[i] = 1
             anno_data.append(anno_patches)
+
+        if not os.path.exists(file_path + "/slide_img/"):
+            os.makedirs(file_path + "/slide_img/")
+        cv2.imwrite(file_path + f"/slide_img/{file_name}/{file_name}_copy1.jpg", orig_img_copy1)
+        cv2.imwrite(file_path + f"/slide_img/{file_name}/{file_name}_copy2.jpg", orig_img_copy2)
 
         boxes_len = []
         # 再次拼接为一个完整的数组,按照最大标注框数量构建数组
@@ -427,8 +454,9 @@ def judge_region_match(coord_cur, patch_size, tumor_mask, anno_regions=None, mas
     """判断指定区域是否包含标注"""
     # 根据当前坐标和图像块大小从肿瘤掩膜中提取当前图像块区域
     patch_masked = tumor_mask[coord_cur[1]:coord_cur[1] + patch_size, coord_cur[0]:coord_cur[0] + patch_size]
+    conf = np.sum(patch_masked > 0) / (patch_size * patch_size)
     # 如果标注面积占比超过了当前区域的一定比例，则属于包含标注
-    if (np.sum(patch_masked > 0) / (patch_size * patch_size)) > mask_threhold:
+    if conf > mask_threhold:
         # 获取当前图像块区域中非零像素值的唯一值和它们的计数
         u, c = np.unique(patch_masked[patch_masked > 0], return_counts=True)
         # 选择计数最多的像素值作为标签
@@ -448,12 +476,44 @@ def judge_region_match(coord_cur, patch_size, tumor_mask, anno_regions=None, mas
                          & (anno_regions[:, 3] < patch_area[3]))[0]
     if match_idx.shape[0] > 0:
         return True, anno_regions[match_idx[0]][-1]
-    return False, 0
+    else:
+        return False, 0
+
+
+def judge_region_match_new(coord_cur, patch_size, tumor_mask, mask_tumor_copy, anno_regions=None, mask_threhold=0.5):
+    """判断指定区域是否包含标注"""
+    # 根据当前坐标和图像块大小从肿瘤掩膜中提取当前图像块区域
+    patch_masked = tumor_mask[coord_cur[1]:coord_cur[1] + patch_size, coord_cur[0]:coord_cur[0] + patch_size]
+    patch_masked_copy = mask_tumor_copy[coord_cur[1]:coord_cur[1] + patch_size, coord_cur[0]:coord_cur[0] + patch_size]
+    conf = np.sum(patch_masked > 0) / (patch_size * patch_size)
+    # 如果标注面积占比超过了当前区域的一定比例，则属于包含标注
+    if conf > mask_threhold:
+        # 获取当前图像块区域中非零像素值的唯一值和它们的计数
+        u, c = np.unique(patch_masked[patch_masked > 0], return_counts=True)
+        # 选择计数最多的像素值作为标签
+        label = u[c == c.max()]
+        return True, label[0], conf, patch_masked_copy
+
+    if len(anno_regions.shape) < 2:
+        return False, 0, conf, patch_masked_copy
+
+    # 如果区域中包含完整的标注，也入选
+    # 计算当前图像块的区域坐标
+    patch_area = [coord_cur[0], coord_cur[1], coord_cur[0] + patch_size, coord_cur[1] + patch_size]
+    # 检查 anno_regions 中是否有标注区域与当前图像块区域重叠
+    match_idx = np.where((anno_regions[:, 0] > patch_area[0])
+                         & (anno_regions[:, 1] > patch_area[1])
+                         & (anno_regions[:, 2] < patch_area[2])
+                         & (anno_regions[:, 3] < patch_area[3]))[0]
+    if match_idx.shape[0] > 0:
+        return True, anno_regions[match_idx[0]][-1], conf, patch_masked_copy
+    else:
+        return False, 0, conf, patch_masked_copy
+
 
 
 def build_annotation_patches_det(file_path, level=1, patch_size=64, mask_threhold=0.2, data_type=None):
     """根据标注生成切片，针对目标检测模式"""
-
     patch_path = file_path + "/patches_level{}".format(level)
     wsi_path = file_path + "/data"
     xml_path = file_path + "/xml"
@@ -539,7 +599,6 @@ def get_anno_box_datas(json_filepath, scale=1):
 
 def build_patch_anno(patch_region, labels=None, mask_threhold=0.5, patch_size=64, anno_regions=None):
     """对于patch区域，根据是否有标注目标，生成相关数据"""
-
     # xywh转xyxy
     patch_region = [patch_region[0], patch_region[1], patch_region[0] + patch_region[2],
                     patch_region[1] + patch_region[3]]
@@ -607,7 +666,6 @@ def aug_annotation_patches(file_path, type, number, level=1):
 
 def filter_patches_exclude_anno(file_path, level=1, patch_size=256):
     """Remove annotation patches from origin coordinates"""
-
     patch_path = file_path + "/patches_level{}".format(level)
     wsi_path = file_path + "/data"
     for patch_file in os.listdir(patch_path):
@@ -645,7 +703,6 @@ def filter_patches_exclude_anno(file_path, level=1, patch_size=256):
 
 def judge_patch_anno_lsil(coord, mask_thredhold, mask_data=None, scale=1, patch_size=64):
     """Judge if patch has annotation data"""
-
     coord_x = int(coord[0] / scale)
     coord_y = int(coord[1] / scale)
     mask_data_item = mask_data[coord_y:coord_y + patch_size, coord_x:coord_x + patch_size]
@@ -658,7 +715,6 @@ def judge_patch_anno_lsil(coord, mask_thredhold, mask_data=None, scale=1, patch_
 
 def judge_patch_anno(coord, mask_data=None, scale=1, patch_size=64, thres_hold=3):
     """Judge if patch has annotation data"""
-
     coord_x = int(coord[0] / scale)
     coord_y = int(coord[1] / scale)
     mask_data_item = mask_data[coord_y:coord_y + patch_size, coord_x:coord_x + patch_size]
@@ -670,7 +726,6 @@ def judge_patch_anno(coord, mask_data=None, scale=1, patch_size=64, thres_hold=3
 
 def label_patch_anno(coord, mask_data=None, scale=1, patch_size=64):
     """Judge if patch has annotation data"""
-
     coord_x = int(coord[0] / scale)
     coord_y = int(coord[1] / scale)
     mask_data_item = mask_data[coord_y:coord_y + patch_size, coord_x:coord_x + patch_size]
@@ -685,7 +740,6 @@ def label_patch_anno(coord, mask_data=None, scale=1, patch_size=64):
 
 def build_normal_patches_image(file_path, is_normal=False, level=1, patch_size=64):
     """Build images of normal region in wsi"""
-
     patch_path = file_path + "/patches_level{}".format(level)
     wsi_path = file_path + "/data"
     xml_path = file_path + "/xml"
@@ -791,34 +845,34 @@ def combine_mul_dataset_csv(file_path, types):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Get tumor mask of tumor-WSI and save it in npy format')
-    parser.add_argument('--source', default=r"/home/bavon/datasets/wsi/ais", type=str, help='Path to the WSI file')
+    parser.add_argument('--source', default=r"D:\project\SLFCD\dataset", type=str, help='Path to the WSI file')
     parser.add_argument('--data_type', default='ais', type=str, help='数据类别：hsil lsil ais')
     parser.add_argument('--level', default=1, type=int, help='at which WSI level to obtain the mask, default 1')
     parser.add_argument('--patch_size', default=256, type=int, help='切片尺寸，默认64*64')
-    parser.add_argument('--patch_slide_size', default=32, type=int, help='滑动窗距离')
+    parser.add_argument('--patch_slide_size', default=64, type=int, help='滑动窗距离')
     parser.add_argument('--save_slide', default=True, type=bool)
-
 
     args = parser.parse_args()
     print("args:", args)
-    file_path = args.source
+    file_path = os.path.join(args.source, args.data_type)
 
     # align_xml_svs(file_path)
     # 划分第一阶段的训练集和测试集
-    # build_data_csv(file_path, 'w')
+    build_data_csv(file_path)
 
     # 添加标注区域
     # crop_with_annotation(file_path, level=args.level)
 
     # 添加滑块标注区域
-    build_annotation_patches(file_path, mask_threhold=0.5, level=args.level, data_type=args.data_type,
-                            patch_size=args.patch_size, patch_slide_size=args.patch_slide_size,
-                            save_slide=args.save_slide)
+    build_annotation_patches(file_path, mask_threhold=0.15, level=args.level, data_type=args.data_type,
+                             patch_size=args.patch_size, patch_slide_size=args.patch_slide_size,
+                             save_slide=args.save_slide)
 
     # 将 normal 添加到第一阶段的训练集和测试集
     # build_data_csv(file_path, 'a')
 
     # types = ["ais", "normal"]
+    # file_path = args.source
     # combine_mul_dataset_csv(file_path, types)
 
     # 目标检测模式
@@ -830,3 +884,7 @@ if __name__ == '__main__':
     # build_normal_patches_image(file_path,is_normal=is_normal)
     # types = ["lsil","normal"]
     print("process success!!!")
+
+# 53-CG23_19514_06,68-CG21_07505_11,70-CG21_01779_02,76-CG21_00825_02,79-CG20_07068_08,85-CG20_07068_16,
+# 23-CG23_09382_08, 19-CG23_09382_03
+

@@ -1,4 +1,5 @@
 from __future__ import print_function, division
+
 import os
 import numpy as np
 import cv2
@@ -42,7 +43,7 @@ class Whole_Slide_Bag_Infer(Whole_Slide_Bag_COMBINE):
             patch_coords = np.array(f['coords'])
             patches_bag_list = []
             # 对每个patch坐标进行处理
-            print("len:{},patch_level:{}".format(patch_coords.shape[0], patch_level))
+            # print("len:{},patch_level:{}".format(patch_coords.shape[0], patch_level))
             for i in range(patch_coords.shape[0]):
                 # 尺寸缩放
                 coord = patch_coords[i]

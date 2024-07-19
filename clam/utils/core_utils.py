@@ -157,10 +157,10 @@ def train(datasets, cur, args):
         else:
             raise NotImplementedError
         
-        model_list = [os.path.join(args.results_dir, i) for i in os.listdir(args.results_dir) if 'pt' in i]
-        if model_list:
-            model.load_state_dict(torch.load(model_list[-1], map_location=device))
-            print("\nLoad pretrained model: ", model_list[-1])
+        # model_list = [os.path.join(args.results_dir, i) for i in os.listdir(args.results_dir) if 'pt' in i]
+        # if model_list:
+        #     model.load_state_dict(torch.load(model_list[-1], map_location=device))
+        #     print("\nLoad pretrained model: ", model_list[-1])
 
     else:  # args.model_type == 'mil'
         if args.n_classes > 2:
@@ -234,7 +234,8 @@ def train(datasets, cur, args):
 
 
 def train_loop_clam(epoch, model, loader, optimizer, n_classes, bag_weight, writer=None, loss_fn=None):
-    device = torch.device("cuda:1" if torch.cuda.is_available() else "cpu")
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    model = model.to(device)
     model.train()
     acc_logger = Accuracy_Logger(n_classes=n_classes)
     inst_logger = Accuracy_Logger(n_classes=n_classes)
@@ -310,7 +311,7 @@ def train_loop_clam(epoch, model, loader, optimizer, n_classes, bag_weight, writ
 
 
 def train_loop(epoch, model, loader, optimizer, n_classes, writer=None, loss_fn=None):
-    device = torch.device("cuda:!" if torch.cuda.is_available() else "cpu")
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model.train()
     acc_logger = Accuracy_Logger(n_classes=n_classes)
     train_loss = 0.
@@ -357,7 +358,7 @@ def train_loop(epoch, model, loader, optimizer, n_classes, writer=None, loss_fn=
 
 
 def validate(cur, epoch, model, loader, n_classes, early_stopping=None, writer=None, loss_fn=None, results_dir=None):
-    device = torch.device("cuda:1" if torch.cuda.is_available() else "cpu")
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model.eval()
     acc_logger = Accuracy_Logger(n_classes=n_classes)
     # loader.dataset.update_mode(True)
@@ -416,7 +417,8 @@ def validate(cur, epoch, model, loader, n_classes, early_stopping=None, writer=N
 
 def validate_clam(cur, epoch, model, loader, n_classes, early_stopping=None, writer=None, loss_fn=None,
                   results_dir=None):
-    device = torch.device("cuda:1" if torch.cuda.is_available() else "cpu")
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    model = model.to(device)
     model.eval()
     acc_logger = Accuracy_Logger(n_classes=n_classes)
     inst_logger = Accuracy_Logger(n_classes=n_classes)
@@ -506,7 +508,7 @@ def validate_clam(cur, epoch, model, loader, n_classes, early_stopping=None, wri
 
 
 def summary(model, loader, n_classes):
-    device = torch.device("cuda:1" if torch.cuda.is_available() else "cpu")
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     acc_logger = Accuracy_Logger(n_classes=n_classes)
     model.eval()
     test_loss = 0.

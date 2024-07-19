@@ -6,20 +6,20 @@ exp_arguments:
   # name tag for saving generated figures and assets
   save_exp_code: HEATMAP_OUTPUT 
   # where to save raw asset files
-  raw_save_dir: clam/heatmaps/heatmap_raw_results
+  raw_save_dir: heatmaps/heatmap_raw_results
   # where to save final heatmaps
-  production_save_dir: clam/heatmaps/heatmap_production_results
+  production_save_dir: heatmaps/heatmap_production_results
   #batch_size: 384
-  batch_size: 128
+  batch_size: 256
 data_arguments: 
   # where is data stored; can be a single str path or a dictionary of key, data_dir mapping
-  data_dir: /home/liang/dataset/wsi/combine/tests/hsil
+  data_dir: # D:\project\SLFCD\dataset\ais
   # column name for key in data_dir (if a dict mapping is used)
   data_dir_key: source
   # csv list containing slide_ids (can additionally have seg/patch paramters, class labels, etc.)
-  process_list: clam/heatmaps/configs/heatmap_demo_dataset_hsil.csv
+  process_list: # clam/heatmaps/configs/heatmap_demo_dataset_hsil.csv
   # preset file for segmentation/patching
-  preset: clam/presets/bwh_biopsy.csv
+  preset: # clam/presets/bwh_biopsy.csv
   # file extention for slides
   slide_ext: .svs
   # label dictionary for str: interger mapping (optional)
@@ -28,7 +28,8 @@ data_arguments:
     #LSCC: 1  
     #lsil: 1
     normal: 0
-    hsil: 1                      
+    # ais: 1
+    hsil: 1
 patching_arguments:
   # arguments for patching
   patch_size: 256
@@ -37,8 +38,8 @@ patching_arguments:
   custom_downsample: 1
 model_arguments: 
   # arguments for initializing model from checkpoint
-  slf_ckpt_path: results/checkpoints/resnet50_hsil/slfcd-19-0.01.ckpt
-  ckpt_path: results/combine/bag_sb_model_s1/s_9_checkpoint.pt
+  slf_ckpt_path: /home/bavon/project/SLFCD/SLFCD/results/checkpoints/hsil_cbam_with_feature/slfcd-09-0.24-v4.ckpt
+  ckpt_path: /home/bavon/project/SLFCD/SLFCD/results/combine/task_1_tumor_vs_normal_CLAM_50_hsil_s1/s_9_checkpoint.pt
   model_type: clam_sb # see utils/eval_utils/
   initiate_fn: initiate_model # see utils/eval_utils/
   model_size: small

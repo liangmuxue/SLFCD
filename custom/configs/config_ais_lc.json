@@ -1,10 +1,10 @@
 {
   "mode": "single",
   "model": "cbam",
-  "batch_size": 16,
+  "batch_size": 64,
   "image_size": 256,
   "patch_level": 1,
-  "slide_size": 32,
+  "slide_size": 64,
   "crop_size": 224,
   "normalize": "True",
   "lr": 1e-4,
@@ -16,10 +16,10 @@
   "patch_path": "patches_level1",
   "epochs": 10,
   "log_every": 5,
-  "num_workers": 6,
+  "num_workers": 8,
   "load_weight": false,
   "model_name" : "ais_cbam_with_feature",
   "work_dir": "/home/bavon/project/SLFCD/SLFCD/results",
-  "save_slide": false
+  "save_slide": true
 }
 

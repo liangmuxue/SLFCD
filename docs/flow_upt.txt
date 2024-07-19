@@ -1,4 +1,8 @@
-数据总目录：/home/bavon/datasets/wsi/hsil
+数据总目录：/home/bavon/datasets/wsi
+
+ais: level 1；path_size 256；slide_size 64
+hsil: level 1；path_size 256；slide_size 64
+lsil: level 0；path_size 64；slide_size 16
 
 一 第一阶段
 1 规整文件命名以及xml拷贝
@@ -9,8 +13,8 @@ camelyon16/bin/utexml2json2.py
 
 3 生成切片（默认level1）
 对 normal/ais/hsil/lsil等都要进行切分
-clam/create_patches_fp.py --source /home/liang/dataset/wsi/ais --save_dir /home/liang/dataset/wsi/ais --step_size 32 --patch_size 128  --patch_level 1 --seg --patch --stitch
-clam/create_patches_fp.py --source /home/liang/dataset/wsi/normal --save_dir /home/liang/dataset/wsi/normal --step_size 32 --patch_size 128  --patch_level 1 --seg --patch --stitch
+clam/create_patches_fp.py --source /home/liang/dataset/wsi/ais --save_dir /home/liang/dataset/wsi/ais --step_size 64 --patch_size 256  --patch_level 1 --seg --patch --stitch
+clam/create_patches_fp.py --source /home/liang/dataset/wsi/normal --save_dir /home/liang/dataset/wsi/normal --step_size 64 --patch_size 256  --patch_level 1 --seg --patch --stitch
 
 输出目录 patches_level1（h5文件，在对应的文件内，里面保存着有效坐标 'coords'及其相关属性），以及 process_list_autogen.csv
 
@@ -20,8 +24,6 @@ mode：w
 读取 process_list_autogen.csv，划分第一阶段的数据集划分
 
 5 生成标注对应的图片 patch
-hsil and ais: level 1；path_size 256；slide_size 32
-
 注意：
 第一阶段：
 1.运行 build_annotation_patches 函数，通过滑动窗口进行检测，保存尽量足够大的有效区域
@@ -46,8 +48,8 @@ mode：ais/hsil
 二 第一阶段测试及推理
 1 生成推理结果
 custom/infer/came_inference.py main 方法
-mode：lsil
-slide_size：128
+mode：lsil/ais
+slide_size：128/256
      
 2 可视化
 custom/infer/came_inference.py viz_results 方法
@@ -56,12 +58,13 @@ custom/infer/came_inference.py viz_results 方法
 三 第二阶段
 1 生成patch特征值
 clam/extract_features_fp.py
---data_dir /home/bavon/datasets/wsi --types 'ais','ais' --feat_dir /home/bavon/datasets/wsi/combine/features --batch_size 256 --slide_ext .svs
+--data_dir /home/bavon/datasets/wsi --types 'ais','normal' --feat_dir /home/bavon/datasets/wsi/combine/features --batch_size 256 --slide_ext .svs
 
 输出目录 /home/bavon/datasets/wsi/combine/features（pt和h5）
 
 2 合并生成训练和测试数据对照表 csv
 custom/data_prepare.py  combine_mul_dataset_csv
+path: /home/bavon/datasets/wsi
 用于划分数据集：在第二阶段用于训练
   
 3 训练

@@ -332,10 +332,10 @@ def ptl_to_numpy(plt):
     image = np.asarray(image)[:, :, :3]
     return image
     
-if __name__ == '__main__': 
-    color_data = [128,0,0]
-    target_shape = [300,600]
-    repeat_with_color(color_data,target_shape)
+# if __name__ == '__main__': 
+#     color_data = [128,0,0]
+#     target_shape = [300,600]
+#     repeat_with_color(color_data,target_shape)
      
        
     

@@ -39,7 +39,7 @@ def initialize_wsi(wsi_path, seg_mask_path=None, seg_params=None, filter_params=
 
 def compute_from_patches(wsi_object, feature_extractor=None, batch_size=512, feat_save_path=None, device=None, **wsi_kwargs):
     roi_dataset = Wsi_Region(wsi_object, **wsi_kwargs)
-    roi_loader = get_simple_loader(roi_dataset, batch_size=batch_size, num_workers=8)
+    roi_loader = get_simple_loader(roi_dataset, batch_size=batch_size, num_workers=0)
     mode = "w"
     with torch.no_grad():
         for idx, (roi, coords) in tqdm(enumerate(roi_loader), total=len(roi_loader), desc=f"process one {os.path.splitext(feat_save_path)[-1][:-3]}"):

@@ -1,0 +1,97 @@
+# CUDA_VISIBLE_DEVICES=0,1 python create_heatmaps.py --config config_template.yaml
+--- 
+data_arguments:
+  save_path: /home/program/path-dig/image/output
+  data_dir: D:/project/SLFCD/dataset/ais/data/1-CG23_18831_01.svs
+model_arguments:
+  # number of classes
+  n_classes: 2
+  device: cuda:1 # HEATMAP_OUTPUT
+  model_size: small
+  drop_out: true
+  k_sample: 8
+  batch_size: 128
+  # factor for downscaling the heatmap before final dispaly
+  custom_downsample: 1
+  target_patch_size: -1
+  # arguments for initializing model from checkpoint
+  ais:
+    slf_ckpt_path: /home/bavon/project/SLFCD/SLFCD/results/checkpoints/ais_cbam_with_feature630/slfcd-05-val_acc-0.91-temp.ckpt
+    ckpt_path: /home/bavon/project/SLFCD/SLFCD/results/combine/task_1_tumor_vs_normal_CLAM_50_ais_s1708/s_0_checkpoint.pt
+  hsil:
+    slf_ckpt_path: /home/bavon/project/SLFCD/SLFCD/results/checkpoints/hsil_cbam_with_feature/slfcd-09-val_acc-0.93-temp.ckpt
+    ckpt_path: /home/bavon/project/SLFCD/SLFCD/results/combine/task_1_tumor_vs_normal_CLAM_50_hsil_s1/s_0_checkpoint.pt
+  lsil:
+    slf_ckpt_path: /home/bavon/project/SLFCD/SLFCD/results/checkpoints/lsil_cbam_with_feature/slfcd-08-0.20-temp.ckpt
+    ckpt_path: /home/bavon/project/SLFCD/SLFCD/results/combine/task_1_tumor_vs_normal_CLAM_50_lsil_s1/s_0_checkpoint.pt
+heatmap_arguments:
+  # downsample at which to visualize heatmap (-1 refers to downsample closest to 32x downsample)
+  vis_level: 1
+  # transparency for overlaying heatmap on background (0: background only, 1: foreground only)
+  alpha: 0.5
+  # whether to use a blank canvas instead of original slide
+  blank_canvas: false
+  # whether to calculate percentile scores in reference to the set of non-overlapping patches
+  use_ref_scores: true
+  # whether to use gaussian blur for further smoothing
+  blur: false
+  # whether to shift the 4 default corner points for checking if a patch is inside a foreground contour
+  use_center_shift: true
+  # whether to only compute heatmap for ROI specified by x1, x2, y1, y2
+  use_roi: false 
+  # whether to calculate heatmap with specified overlap (by default, coarse heatmap without overlap is always calculated)
+  calc_heatmap: true
+  # whether to binarize attention scores
+  binarize: false
+  # binarization threshold: (0, 1)
+  binary_thresh: -1
+  cmap: jet
+  use_holes: true
+sample_arguments:
+  samples:
+    name: "topk_high_attention"
+    sample: true
+    seed: 1
+    k: 15 # save top-k patches
+    mode: topk
+ais_arguments:
+  patch_level: 1
+  patch_size: 256
+  slide_size: 64
+  label_dict:
+    normal: 0
+    ais: 1
+hsil_arguments:
+  patch_level: 1
+  patch_size: 256
+  slide_size: 64
+  label_dict:
+    normal: 0
+    hsil: 1
+lsil_arguments:
+  patch_level: 0
+  patch_size: 128
+  slide_size: 64
+  label_dict:
+    normal: 0
+    lsil: 1
+seg_arguments:
+  seg_level: 1
+  sthresh: 8
+  mthresh: 7
+  close: 4
+  use_otsu: False
+  keep_ids: none
+  exclude_ids: none
+filter_arguments:
+  a_t: 100
+  a_h: 16
+  max_n_holes: 8
+vis_arguments:
+  vis_level: 1
+  line_thickness: 250
+patch_arguments:
+  use_padding: true
+  contour_fn: four_pt_easy
+
+

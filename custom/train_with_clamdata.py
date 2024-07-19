@@ -1,5 +1,4 @@
 import os
-import shutil
 import argparse
 import json
 from argparse import Namespace
@@ -20,14 +19,8 @@ from clam.datasets.dataset_combine import Whole_Slide_Bag_COMBINE
 from utils.constance import get_label_cate, get_label_cate_num
 from custom.model.cbam_ext import ResidualNet
 
-import sys
-sys.path.append(os.path.dirname(os.path.abspath(__file__)) + '/../../')
-
 import warnings
 warnings.filterwarnings('ignore')
-
-device = torch.device('cuda:1')
-# device = torch.device('cpu')
 
 from utils.vis import visdom_data
 from visdom import Visdom
@@ -37,6 +30,7 @@ viz_tumor_valid = Visdom(env="tumor_valid")
 viz_normal_train = Visdom(env="normal_train")
 viz_normal_valid = Visdom(env="normal_valid")
 
+device = 'cuda:1'
 
 def chose_model(model_name, num_classes, image_size=512):
     if model_name == 'resnet18':
@@ -56,9 +50,10 @@ def chose_model(model_name, num_classes, image_size=512):
 
 
 class CoolSystem(pl.LightningModule):
-    def __init__(self, hparams, device=None):
+    def __init__(self, hparams):
         super(CoolSystem, self).__init__()
         self.params = hparams
+        
         # define the model
         self.model = chose_model(hparams.model, len(get_label_cate(mode=hparams.mode)), image_size=hparams.image_size)
         self.model = self.model.to(device)
@@ -88,11 +83,10 @@ class CoolSystem(pl.LightningModule):
     def training_step(self, batch, batch_idx):
         """training"""
         x, y, item, img_ori = batch
-        x = x.to(device)
-        y = y.to(device)
+        x, y = x.to(device), y.to(device)
         # y = y.type(torch.long)
 
-        self.model = self.model.to(device)
+        # self.model = self.model.to(device)
 
         output_feature, output_fc = self.model.forward(x)
         output = torch.squeeze(output_fc, dim=-1)
@@ -124,7 +118,7 @@ class CoolSystem(pl.LightningModule):
         x, y = x.to(device), y.to(device)
         # y = y.type(torch.long)
 
-        self.model = self.model.to(device)
+        # self.model = self.model.to(device)
 
         # 特征和标签
         output_feature, output_fc = self.model.forward(x)
@@ -231,7 +225,8 @@ class CoolSystem(pl.LightningModule):
                                   batch_size=self.params.batch_size,
                                   collate_fn=self._collate_fn,
                                   shuffle=True,
-                                  num_workers=self.params.num_workers)
+                                  num_workers=self.params.num_workers, 
+                                  pin_memory=False)
         # data_summarize(train_loader)
         return train_loader
 
@@ -248,6 +243,7 @@ class CoolSystem(pl.LightningModule):
             transforms.Resize(224),
             # transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
         ])
+        
         dataset_valid = Whole_Slide_Bag_COMBINE(file_path, wsi_path, mask_path, work_type="valid", mode=self.params.mode,
                                                 patch_path=self.params.patch_path, transform=trans,
                                                 patch_size=self.params.image_size, split_data=split_data,
@@ -256,7 +252,8 @@ class CoolSystem(pl.LightningModule):
                                 batch_size=self.params.batch_size,
                                 collate_fn=self._collate_fn,
                                 shuffle=False,
-                                num_workers=self.params.num_workers)
+                                num_workers=self.params.num_workers,
+                                pin_memory=False)
         return val_loader
 
     def _collate_fn(self, batch):
@@ -284,7 +281,7 @@ def get_last_ck_file(checkpoint_path):
     return list[-1]
 
 
-def main(hparams, device_ids=None):
+def main(hparams):
     checkpoint_path = os.path.join(hparams.work_dir, "checkpoints", hparams.model_name)
     print("checkpoint_path: ", checkpoint_path)
 
@@ -292,22 +289,19 @@ def main(hparams, device_ids=None):
     log_path = os.path.join(hparams.work_dir, logger_name, hparams.model_name)
     print("log_path: ", log_path)
 
-    if os.path.exists(checkpoint_path):
-        shutil.rmtree(checkpoint_path)
-    os.mkdir(checkpoint_path)
-    if os.path.exists(log_path):
-        shutil.rmtree(log_path)
-    os.mkdir(log_path)
+    if not os.path.exists(checkpoint_path):
+        os.mkdir(checkpoint_path)
+    if not os.path.exists(log_path):
+        os.mkdir(log_path)
 
-    filename = 'slfcd-{epoch:02d}-{val_loss:.2f}'
+    filename = 'slfcd-{epoch:02d}-val_acc-{val_acc:.2f}'
 
     checkpoint_callback = ModelCheckpoint(
-        monitor='val_loss',
+        monitor='val_acc',
         dirpath=checkpoint_path,
         filename=filename,
         save_last=True,
         save_top_k=-1,
-        every_n_train_steps=60,
         auto_insert_metric_name=False
     )
 
@@ -318,12 +312,10 @@ def main(hparams, device_ids=None):
     if hparams.load_weight:
         file_name = get_last_ck_file(checkpoint_path)
         checkpoint_path_file = "{}/{}".format(checkpoint_path, file_name)
-        # model = torch.load(checkpoint_path_file) #
         model = CoolSystem.load_from_checkpoint(checkpoint_path_file).to(device)
-        # trainer = Trainer(resume_from_checkpoint=checkpoint_path_file)
         trainer = pl.Trainer(
             max_epochs=hparams.epochs,
-            gpus=[int(device_ids)],
+            gpus=[int(hparams.device_ids)],
             accelerator='gpu',
             logger=model_logger,
             callbacks=[checkpoint_callback],
@@ -331,19 +323,16 @@ def main(hparams, device_ids=None):
         )
         trainer.fit(model.to(device), ckpt_path=checkpoint_path_file)
     else:
-        model = CoolSystem(hparams, device=device)
+        model = CoolSystem(hparams)
         model = model.to(device)
         # data_summarize(model.val_dataloader())
         trainer = pl.Trainer(
             max_epochs=hparams.epochs,
-            gpus=[int(device_ids)],
+            gpus=[int(hparams.device_ids)],
             accelerator='gpu',
             logger=model_logger,
             callbacks=[checkpoint_callback],
-            log_every_n_steps=1,
-            enable_checkpointing=True,
-            enable_progress_bar=True,
-            auto_lr_find=True
+            log_every_n_steps=1
         )
         trainer.fit(model)
 
@@ -377,18 +366,22 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Train model')
     parser.add_argument('--device_ids', default='1', type=str, help='choose device')
     parser.add_argument('--mode', default='ais', type=str, help='choose type')
+
     args = parser.parse_args()
     device_ids = args.device_ids
 
     if args.mode == "hsil":
-        cnn_path = 'custom/configs/config_hsil_liang.json'
+        cnn_path = 'configs/config_hsil_lc.json'
     if args.mode == "lsil":
-        cnn_path = 'custom/configs/config_lsil_liang.json'
+        cnn_path = 'configs/config_lsil_lc.json'
     if args.mode == "ais":
         cnn_path = 'configs/config_ais_lc.json'
     with open(cnn_path, 'r') as f:
         args = json.load(f)
+
+    args["device_ids"] = device_ids
     hyperparams = Namespace(**args)
     print("hyperparams: ", hyperparams)
-    main(hyperparams, device_ids=device_ids)
+    main(hyperparams)
     print('process success!!!')
+    

@@ -1,3 +1,14 @@
+# The path can also be read from a config file, etc.
+OPENSLIDE_PATH = r'D:\BaiduNetdiskDownload\openslide-bin-4.0.0.3-windows-x64\bin'
+
+import os
+
+if hasattr(os, 'add_dll_directory'):
+    # Python >= 3.8 on Windows
+    with os.add_dll_directory(OPENSLIDE_PATH):
+        import openslide
+else:
+    import openslide
 import os
 import sys
 import logging
@@ -47,6 +58,7 @@ def get_mask_tumor(wsi_file_path, json_file_path, level=0):
     w, h = slide.level_dimensions[level]
     # 初始化一个全零的掩膜数组
     mask_tumor = np.zeros((h, w))
+    mask_tumor_copy = mask_tumor.copy()
 
     # 获取指定层级的缩放比例
     scale = slide.level_downsamples[level]
@@ -64,16 +76,18 @@ def get_mask_tumor(wsi_file_path, json_file_path, level=0):
         code = get_label_with_group_code(group_name)["code"]
         # 根据肿瘤分组名称获取对应的标签代码
         # 多个多边形填充  (code, code, code)
-        cv2.fillPoly(mask_tumor, [vertices], (255, 255, 255))
+        cv2.fillPoly(mask_tumor, [vertices], (code, code, code))
+        cv2.fillPoly(mask_tumor_copy, [vertices], (255, 255, 255))
     mask_tumor = mask_tumor.astype(np.uint8)
-    return mask_tumor
+    mask_tumor_copy = mask_tumor_copy.astype(np.uint8)
+    return mask_tumor, mask_tumor_copy
 
 
 def main(args):
     logging.basicConfig(level=logging.INFO)
     # file_path = "/home/bavon/datasets/wsi/lsil"
-    file_path = "/home/bavon/datasets/wsi/hsil"
-    file_path = args.wsi_path
+    file_path = r"D:\project\SLFCD\dataset\ais"
+    # file_path = args.wsi_path
     level = args.level
     # file_path = "/home/bavon/datasets/wsi/normal"
     wsi_path = "{}/data".format(file_path)

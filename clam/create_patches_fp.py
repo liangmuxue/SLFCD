@@ -6,6 +6,8 @@ import numpy as np
 import argparse
 import pandas as pd
 import shutil
+import cv2
+from segmodel.segone import load_Seg_model
 
 
 def stitching(file_path, wsi_object, downscale=64):
@@ -35,7 +37,7 @@ def seg_and_patch(source, save_dir, patch_save_dir, mask_save_dir, stitch_save_d
                   vis_params={'vis_level': -1, 'line_thickness': 500},
                   patch_params={'use_padding': True, 'contour_fn': 'four_pt_easy'},
                   patch_level=0, use_default_params=False, seg=False, save_mask=True,
-                  stitch=False, patch=False, process_list=None):
+                  stitch=False, patch=False, process_list=None, seg_model=False, model=None, device='cpu'):
     # 如果有覆盖的标志，则先清除相关文件
     # 清除所有h5文件
     h5_path = os.path.join(source, "patches_level{}".format(patch_level))
@@ -155,18 +157,24 @@ def seg_and_patch(source, save_dir, patch_save_dir, mask_save_dir, stitch_save_d
         else:
             current_seg_params['exclude_ids'] = []
 
-        w, h = WSI_object.level_dim[current_seg_params['seg_level']]
-        if w * h > 1e8:
-            print('level_dim {} x {} is likely too large for successful segmentation, aborting'.format(w, h))
-            df.loc[idx, 'status'] = 'failed_seg'
-            continue
+        # w, h = WSI_object.level_dim[current_seg_params['seg_level']]
+        # if w * h > 1e8:
+        #     print('level_dim {} x {} is likely too large for successful segmentation, aborting'.format(w, h))
+        #     df.loc[idx, 'status'] = 'failed_seg'
+        #     continue
 
         df.loc[idx, 'vis_level'] = current_vis_params['vis_level']
         df.loc[idx, 'seg_level'] = current_seg_params['seg_level']
 
         # 很重要，通过分割来获取到轮廓
         if seg:
-            WSI_object = segment(WSI_object, current_seg_params, current_filter_params)
+            if not seg_model:
+                WSI_object = segment(WSI_object, current_seg_params, current_filter_params)
+            else:
+                WSI_object.segmentTissue_new_model(**current_seg_params, filter_params=current_filter_params,
+                                                   model=model, device=device)
+                mask_path = os.path.join(mask_save_dir, slide_id + '.png')
+                cv2.imwrite(mask_path, WSI_object.img_otsu)
 
         if save_mask:
             mask = WSI_object.visWSI(**current_vis_params)
@@ -175,12 +183,12 @@ def seg_and_patch(source, save_dir, patch_save_dir, mask_save_dir, stitch_save_d
 
         # 这一步是最主要的，将标注区域保存为h5
         if patch:
-            current_patch_params.update({'patch_level': patch_level, 'patch_size': patch_size, 'step_size': step_size,
-                                         'save_path': patch_save_dir})
-            file_path = patching(WSI_object=WSI_object, **current_patch_params)
-            if file_path is None:
-                df.loc[idx, 'status'] = 'failed_seg'
-                continue
+            current_patch_params.update(
+                {'patch_level': patch_level, 'patch_size': patch_size, 'step_size': step_size,
+                 'save_path': patch_save_dir})
+            patching(WSI_object=WSI_object, **current_patch_params)
+            df.loc[idx, 'status'] = 'failed_seg'
+            # continue
 
         file_path = os.path.join(patch_save_dir, slide_id + '.h5')
         if stitch:
@@ -200,10 +208,13 @@ def seg_and_patch(source, save_dir, patch_save_dir, mask_save_dir, stitch_save_d
 
 
 parser = argparse.ArgumentParser(description='seg and patch')
-parser.add_argument('--source', type=str, default=r"/home/bavon/datasets/wsi/ais",
+parser.add_argument('--source', type=str, default=r"/home/bavon/datasets/wsi/ais/",
                     help='path to folder containing raw wsi image files')
-parser.add_argument('--step_size', type=int, default=32, help='step_size')
+parser.add_argument('--step_size', type=int, default=64, help='step_size')
 parser.add_argument('--patch_size', type=int, default=256, help='patch_size')
+parser.add_argument('--seg_model', type=bool, default=True, help='seg model True or False')
+parser.add_argument('--seg_model_path', type=str, default=r'/home/bavon/project/SLFCD/SLFCD/clam/segmodel/epoch-30.pth', help='seg model path')
+parser.add_argument('--device', type=str, default='cuda:1', help='gpu or cpu')
 parser.add_argument('--patch', default=True, action='store_true')
 parser.add_argument('--seg', default=True, action='store_true')
 parser.add_argument('--stitch', default=True, action='store_true')
@@ -225,7 +236,6 @@ if __name__ == '__main__':
 
     if args.process_list:
         process_list = os.path.join(args.save_dir, args.process_list)
-
     else:
         process_list = None
 
@@ -261,10 +271,10 @@ if __name__ == '__main__':
     # contour_fn：轮廓检查功能，用于决定应将面片视为前景还是背景（在“four_pt”之间进行选择 - 检查围绕面片中心的小网格中的所有四个点是否都在等高线内，
     # “center” - 检查面片的中心是否在等高线内， “basic” - 检查面片的左上角是否在等高线内， 默认值： 'four_pt_easy'）
 
-    seg_params = {'seg_level': -1, 'sthresh': 8, 'mthresh': 7, 'close': 4, 'use_otsu': False,
+    seg_params = {'seg_level': args.patch_level, 'sthresh': 8, 'mthresh': 7, 'close': 4, 'use_otsu': False,
                   'keep_ids': 'none', 'exclude_ids': 'none'}
     filter_params = {'a_t': 100, 'a_h': 16, 'max_n_holes': 8}
-    vis_params = {'vis_level': -1, 'line_thickness': 250}
+    vis_params = {'vis_level': args.patch_level, 'line_thickness': 250}
     patch_params = {'use_padding': True, 'contour_fn': 'four_pt_easy'}
 
     if args.preset:
@@ -287,8 +297,12 @@ if __name__ == '__main__':
                   'vis_params': vis_params}
 
     print("parameters: ", parameters)
+    model = load_Seg_model(args.seg_model_path, args.device)
 
     seg_and_patch(**directories, **parameters, patch_size=args.patch_size, step_size=args.step_size,
                   seg=args.seg, use_default_params=False, save_mask=True, stitch=args.stitch,
-                  patch_level=args.patch_level, patch=args.patch, process_list=process_list)
+                  patch_level=args.patch_level, patch=args.patch, process_list=process_list,
+                  seg_model=args.seg_model, model=model, device=args.device)
     print("process success!!!")
+
+

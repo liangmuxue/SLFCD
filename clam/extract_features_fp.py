@@ -1,3 +1,8 @@
+from __future__ import print_function
+import sys
+sys.path.append(r'/home/bavon/project/SLFCD/SLFCD/')
+sys.path.append(r'/home/bavon/project/SLFCD/SLFCD/extras/')
+sys.path.append(r'/home/bavon/project/SLFCD/SLFCD/project/')
 import torch
 import os
 import time
@@ -13,8 +18,11 @@ from utils.file_utils import save_hdf5
 import h5py
 import openslide
 from custom.train_with_clamdata import CoolSystem, get_last_ck_file
+import sys
 
-device = torch.device('cuda:1') if torch.cuda.is_available() else torch.device('cpu')
+sys.path.append(os.path.dirname(os.path.abspath(__file__)) + '/../../')
+
+device = torch.device('cuda:0') if torch.cuda.is_available() else torch.device('cpu')
 
 
 def compute_w_loader(file_path, output_path, wsi, model, batch_size=8, verbose=0,
@@ -39,7 +47,7 @@ def compute_w_loader(file_path, output_path, wsi, model, batch_size=8, verbose=0
                                  custom_transforms=custom_transforms, custom_downsample=custom_downsample,
                                  target_patch_size=target_patch_size)
 
-    kwargs = {'num_workers': 4, 'pin_memory': True} if device.type == "cuda:1" else {}
+    kwargs = {'num_workers': 4, 'pin_memory': True} if device.type == "cuda" else {}
     loader = DataLoader(dataset=dataset, batch_size=batch_size, **kwargs, collate_fn=collate_features)
 
     if verbose > 0:
@@ -66,7 +74,7 @@ parser.add_argument('--data_dir', type=str, default='/home/bavon/datasets/wsi')
 parser.add_argument('--mode', type=str, default="ais")
 parser.add_argument('--level', type=int, default=1)
 parser.add_argument('--slide_ext', type=str, default='.svs')
-parser.add_argument('--types', type=str, default='ais,ais')
+parser.add_argument('--types', type=str, default='ais,normal')
 parser.add_argument('--feat_dir', type=str, default='/home/bavon/datasets/wsi/combine/features')
 parser.add_argument('--batch_size', type=int, default=256)
 parser.add_argument('--no_auto_skip', default=False, action='store_true')
@@ -100,7 +108,8 @@ if __name__ == '__main__':
     print('loading model checkpoint')
     checkpoint_path = os.path.join('..', hparams.work_dir, "checkpoints", hparams.model_name)
     file_name = get_last_ck_file(checkpoint_path)
-    checkpoint_path_file = "{}/{}".format(checkpoint_path, file_name)
+    checkpoint_path_file =  '/home/bavon/project/SLFCD/SLFCD/results/checkpoints/ais_cbam_with_feature630/slfcd-05-val_acc-0.91-temp.ckpt'    #"{}/{}".format(slfcd-01-val_acc-0.91.ckpt)
+    print('checkpoint_path_file: ', checkpoint_path_file)
     model = CoolSystem.load_from_checkpoint(checkpoint_path_file).to(device)
     # Remove Fc layer
     # model = torch.nn.Sequential(*(list(model.model.children())[:-1]))
@@ -121,17 +130,17 @@ if __name__ == '__main__':
         bag_base, _ = os.path.splitext(bag_name)
         fea_file_path = os.path.join(args.feat_dir, 'pt_files', type, bag_base + '.pt')
 
-        if os.path.exists(fea_file_path):
-            print("file exists:{}".format(fea_file_path))
-            continue
+        # if os.path.exists(fea_file_path):
+        #     print("file exists:{}".format(fea_file_path))
+        #     continue
 
         h5_file_path = os.path.join(data_h5_dir, bag_name)
         slide_file_path = os.path.join(data_slide_dir, slide_id + args.slide_ext)
         print('\nprogress: {}/{}'.format(bag_candidate_idx, total))
 
-        if not args.no_auto_skip and slide_id + '.pt' in dest_files:
-            print('skipped {}'.format(slide_id))
-            continue
+        # if not args.no_auto_skip and slide_id + '.pt' in dest_files:
+        #     print('skipped {}'.format(slide_id))
+        #     continue
 
         output_path = os.path.join(args.feat_dir, 'h5_files', type, bag_name)
         print("output_path: ", output_path)

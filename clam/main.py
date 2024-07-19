@@ -11,8 +11,6 @@ import torch
 import pandas as pd
 import numpy as np
 
-os.environ['CUDA_VISIBLE_DEVICES'] = '1'
-
 
 def return_splits(data_dir, type='ais'):
     train_dataset = Combine_MIL_Dataset(data_dir=data_dir, mode="train", shuffle=False, seed=args.seed,
@@ -69,7 +67,7 @@ def main(args):
 
 # Generic training settings
 parser = argparse.ArgumentParser(description='Configurations for WSI Training')
-parser.add_argument('--device', default="cuda", type=str)
+parser.add_argument('--device', default="cuda:0", type=str)
 parser.add_argument('--type', default="ais", type=str)
 parser.add_argument('--load_weights', action='store_true', default=False, help='Load pretrained weights to model')
 parser.add_argument('--data_dir', type=str, default='/home/bavon/datasets/wsi/combine', help='data directory')
@@ -77,7 +75,7 @@ parser.add_argument('--max_epochs', type=int, default=100,
                     help='maximum number of epochs to train (default: 200)')
 parser.add_argument('--lr', type=float, default=1e-4,
                     help='learning rate (default: 0.0001)')
-parser.add_argument('--label_frac', type=float, default=1.0,
+parser.add_argument('--label_frac', type=float, default=0.5,
                     help='fraction of training labels (default: 1.0) (训练标签的分数（默认值：1.0）)')
 parser.add_argument('--reg', type=float, default=1e-5,
                     help='weight decay (default: 1e-5)')
@@ -92,7 +90,7 @@ parser.add_argument('--testing', action='store_true', default=False, help='debug
 parser.add_argument('--early_stopping', action='store_true', default=False, help='enable early stopping')
 parser.add_argument('--opt', type=str, choices=['adam', 'sgd'], default='adam')
 parser.add_argument('--drop_out', action='store_true', default=True, help='enable dropout (p=0.25)')
-parser.add_argument('--bag_loss', type=str, choices=['svm', 'ce'], default='ce',
+parser.add_argument('--bag_loss', type=str, choices=['svm', 'ce'], default='svm',
                     help='slide-level classification loss function (default: ce) (滑动级别分类损失函数（默认：ce）)')
 parser.add_argument('--model_type', type=str, choices=['clam_sb', 'clam_mb', 'mil'], default='clam_sb',
                     help='type of model (default: clam_sb, clam w/ single attention branch)')
@@ -106,7 +104,7 @@ parser.add_argument('--task', type=str, choices=['task_1_tumor_vs_normal', 'task
 # CLAM specific options
 parser.add_argument('--no_inst_cluster', action='store_true', default=False,
                     help='disable instance-level clustering (禁用实例级群集)')
-parser.add_argument('--inst_loss', type=str, choices=['svm', 'ce', None], default=None,
+parser.add_argument('--inst_loss', type=str, choices=['svm', 'ce', None], default='svm',
                     help='instance-level clustering loss function (default: None) (实例级聚类损失函数（默认：无）)')
 parser.add_argument('--subtyping', action='store_true', default=False,
                     help='subtyping problem')
