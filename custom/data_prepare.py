@@ -1,3 +1,15 @@
+# The path can also be read from a config file, etc.
+OPENSLIDE_PATH = r'D:\BaiduNetdiskDownload\openslide-bin-4.0.0.3-windows-x64\bin'
+
+import os
+
+if hasattr(os, 'add_dll_directory'):
+    # Python >= 3.8 on Windows
+    with os.add_dll_directory(OPENSLIDE_PATH):
+        import openslide
+else:
+    import openslide
+
 import os
 import argparse
 from shutil import copyfile
@@ -16,7 +28,7 @@ from utils.cv_utils import rect_overlap
 from custom.tumor_mask import get_mask_tumor
 from visdom import Visdom
 
-viz_debug = Visdom(env="debug")
+# viz_debug = Visdom(env="debug")
 
 
 def align_xml_svs(file_path):
@@ -53,14 +65,16 @@ def build_data_csv(file_path, split_rate=0.7):
     """build train and valid list to csv"""
     list_file = os.path.join(file_path, "process_list_autogen.csv")
     file_list = pd.read_csv(list_file)
-    total_file_number = file_list.shape[0]
+
+    file_list_shuffled = file_list.sample(frac=1, random_state=None)
+    total_file_number = file_list_shuffled.shape[0]
 
     train_number = int(total_file_number * split_rate)
     train_file_path = file_path + "/train.csv"
     valid_file_path = file_path + "/valid.csv"
 
     list_train, list_valid = [], []
-    for i, wsi_files in enumerate(file_list["slide_id"].values):
+    for i, wsi_files in enumerate(file_list_shuffled["slide_id"].values):
         single_name = wsi_files.split(".")[0]
         wsi_file = single_name + ".svs"
         if i < train_number:
@@ -310,7 +324,7 @@ def build_annotation_patches(file_path, level=1, patch_size=64, patch_slide_size
     #                                     patch_slide_size=patch_slide_size, data_type=data_type,
     #                                     mask_threhold=mask_threhold)
 
-    Parallel(n_jobs=1)(delayed(build_annotation_patches_single)(file_path, xml_file, level=level, patch_size=patch_size,
+    Parallel(n_jobs=8)(delayed(build_annotation_patches_single)(file_path, xml_file, level=level, patch_size=patch_size,
                                                                 patch_slide_size=patch_slide_size, data_type=data_type,
                                                                 mask_threhold=mask_threhold, save_slide=save_slide
                                                                 ) for xml_file in os.listdir(xml_path))
@@ -487,15 +501,15 @@ def judge_region_match_new(coord_cur, patch_size, tumor_mask, mask_tumor_copy, a
     patch_masked_copy = mask_tumor_copy[coord_cur[1]:coord_cur[1] + patch_size, coord_cur[0]:coord_cur[0] + patch_size]
     conf = np.sum(patch_masked > 0) / (patch_size * patch_size)
     # 如果标注面积占比超过了当前区域的一定比例，则属于包含标注
-    if conf > mask_threhold:
-        # 获取当前图像块区域中非零像素值的唯一值和它们的计数
-        u, c = np.unique(patch_masked[patch_masked > 0], return_counts=True)
-        # 选择计数最多的像素值作为标签
-        label = u[c == c.max()]
-        return True, label[0], conf, patch_masked_copy
-
-    if len(anno_regions.shape) < 2:
-        return False, 0, conf, patch_masked_copy
+    # if conf > mask_threhold:
+    #     # 获取当前图像块区域中非零像素值的唯一值和它们的计数
+    #     u, c = np.unique(patch_masked[patch_masked > 0], return_counts=True)
+    #     # 选择计数最多的像素值作为标签
+    #     label = u[c == c.max()]
+    #     return True, label[0], conf, patch_masked_copy
+    #
+    # if len(anno_regions.shape) < 2:
+    #     return False, 0, conf, patch_masked_copy
 
     # 如果区域中包含完整的标注，也入选
     # 计算当前图像块的区域坐标
@@ -632,16 +646,17 @@ def build_patch_anno(patch_region, labels=None, mask_threhold=0.5, patch_size=64
 
 def aug_annotation_patches(file_path, type, number, level=1):
     import Augmentor
-    tumor_patch_path = os.path.join(file_path, "tumor_patch_img")
-    if type == 'lsil':
-        labels = [4, 5]
-    elif type == 'hsil':
-        labels = [1, 2, 3]
-    elif type == 'ais':
-        labels = [7, 8, 9, 10]
-    for label in labels:
-        img_path = os.path.join(tumor_patch_path, str(label), "origin")
-        target_img_path = os.path.join(tumor_patch_path, str(label), "output")
+    tumor_patch_path = os.path.join(file_path, "mask")
+    # if type == 'lsil':
+    #     labels = [4, 5]
+    # elif type == 'hsil':
+    #     labels = [1, 2, 3]
+    # elif type == 'ais':
+    #     labels = [7, 8, 9, 10]
+    # for label in labels:
+    for i in os.listdir(tumor_patch_path):
+        img_path = os.path.join(tumor_patch_path, i, "positive")
+        target_img_path = os.path.join(tumor_patch_path, i, "output")
         p = Augmentor.Pipeline(img_path, output_directory=target_img_path)
 
         p.rotate(probability=0.7, max_left_rotation=10, max_right_rotation=10)
@@ -662,6 +677,7 @@ def aug_annotation_patches(file_path, type, number, level=1):
         p.random_brightness(probability=1, min_factor=0.7, max_factor=1.2)
         p.sample(number)
         p.process()
+        break
 
 
 def filter_patches_exclude_anno(file_path, level=1, patch_size=256):
@@ -845,11 +861,11 @@ def combine_mul_dataset_csv(file_path, types):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Get tumor mask of tumor-WSI and save it in npy format')
-    parser.add_argument('--source', default=r"D:\project\SLFCD\dataset", type=str, help='Path to the WSI file')
+    parser.add_argument('--source', default=r"/home/bavon/datasets/wsi", type=str, help='Path to the WSI file')
     parser.add_argument('--data_type', default='ais', type=str, help='数据类别：hsil lsil ais')
     parser.add_argument('--level', default=1, type=int, help='at which WSI level to obtain the mask, default 1')
-    parser.add_argument('--patch_size', default=256, type=int, help='切片尺寸，默认64*64')
-    parser.add_argument('--patch_slide_size', default=64, type=int, help='滑动窗距离')
+    parser.add_argument('--patch_size', default=512, type=int, help='切片尺寸，默认64*64')
+    parser.add_argument('--patch_slide_size', default=128, type=int, help='滑动窗距离')
     parser.add_argument('--save_slide', default=True, type=bool)
 
     args = parser.parse_args()
@@ -858,22 +874,21 @@ if __name__ == '__main__':
 
     # align_xml_svs(file_path)
     # 划分第一阶段的训练集和测试集
-    build_data_csv(file_path)
+    # build_data_csv(file_path)
+    # 数据增强
+    # aug_annotation_patches(file_path, 'ais', 2)
 
     # 添加标注区域
     # crop_with_annotation(file_path, level=args.level)
 
     # 添加滑块标注区域
-    build_annotation_patches(file_path, mask_threhold=0.15, level=args.level, data_type=args.data_type,
-                             patch_size=args.patch_size, patch_slide_size=args.patch_slide_size,
-                             save_slide=args.save_slide)
+    # build_annotation_patches(file_path, mask_threhold=0.15, level=args.level, data_type=args.data_type,
+    #                          patch_size=args.patch_size, patch_slide_size=args.patch_slide_size,
+    #                          save_slide=args.save_slide)
 
-    # 将 normal 添加到第一阶段的训练集和测试集
-    # build_data_csv(file_path, 'a')
-
-    # types = ["ais", "normal"]
-    # file_path = args.source
-    # combine_mul_dataset_csv(file_path, types)
+    types = ["ais", "normal"]
+    file_path = args.source
+    combine_mul_dataset_csv(file_path, types)
 
     # 目标检测模式
     # build_annotation_patches_det(file_path,mask_threhold=0.005,level=args.level,patch_size=args.patch_size,data_type=args.data_type)
@@ -885,6 +900,4 @@ if __name__ == '__main__':
     # types = ["lsil","normal"]
     print("process success!!!")
 
-# 53-CG23_19514_06,68-CG21_07505_11,70-CG21_01779_02,76-CG21_00825_02,79-CG20_07068_08,85-CG20_07068_16,
-# 23-CG23_09382_08, 19-CG23_09382_03
 

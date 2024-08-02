@@ -67,7 +67,7 @@ def main(args):
 
 # Generic training settings
 parser = argparse.ArgumentParser(description='Configurations for WSI Training')
-parser.add_argument('--device', default="cuda:0", type=str)
+parser.add_argument('--device', default="cpu", type=str)
 parser.add_argument('--type', default="ais", type=str)
 parser.add_argument('--load_weights', action='store_true', default=False, help='Load pretrained weights to model')
 parser.add_argument('--data_dir', type=str, default='/home/bavon/datasets/wsi/combine', help='data directory')
@@ -75,7 +75,7 @@ parser.add_argument('--max_epochs', type=int, default=100,
                     help='maximum number of epochs to train (default: 200)')
 parser.add_argument('--lr', type=float, default=1e-4,
                     help='learning rate (default: 0.0001)')
-parser.add_argument('--label_frac', type=float, default=0.5,
+parser.add_argument('--label_frac', type=float, default=0.6,
                     help='fraction of training labels (default: 1.0) (训练标签的分数（默认值：1.0）)')
 parser.add_argument('--reg', type=float, default=1e-5,
                     help='weight decay (default: 1e-5)')

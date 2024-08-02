@@ -15,7 +15,7 @@ from custom.train_with_clamdata import CoolSystem
 from tqdm import tqdm
 from wsi_core.WholeSlideImage import WholeSlideImage
 from clam.datasets.dataset_h5 import Whole_Slide_Bag_FP
-
+from segmodel.segone import load_Seg_model
 import warnings
 
 warnings.filterwarnings("ignore")
@@ -93,7 +93,7 @@ class Infer:
         print('second ckpt path: {}'.format(model_args['ckpt_path']))
         return model_one, model_two
 
-    def infer(self, image_path, name, patch_level, patch_size, step_size, model, label_dict, seg_params, kwargs):
+    def infer(self, image_path, name, patch_level, patch_size, step_size, model, label_dict, seg_params, seg_model, kwargs):
         slide_id = os.path.split(image_path)[-1][:-4]
 
         # ----------------------- save -------------------------------------------
@@ -129,7 +129,13 @@ class Infer:
 
         try:
             WSI_object = WholeSlideImage(image_path)
-            WSI_object.segmentTissue(**seg_params, filter_params=filter_params)
+            if not self.model_args.seg_model:
+                WSI_object.segmentTissue(**seg_params, filter_params=filter_params)
+            else:
+                WSI_object.segmentTissue_new_model(**seg_params, filter_params=filter_params,
+                                                   model=seg_model, device=self.model_args.device)
+                
+            
             mask = WSI_object.visWSI(**self.def_vis_params)
             mask.save(segment_mask_path)
 
@@ -190,7 +196,7 @@ class Infer:
                         total=self.sample_args.samples["k"], desc=f'{name} save ' + self.sample_args.samples['name']):
                     # 截取注意力区域并保存
                     patch = WSI_object.wsi.read_region(tuple(s_coord), patch_level, patch_size).convert('RGB')
-                    patch.save(os.path.join(TwoPhase_img_save_dir, '[{},{}].png'.format(s_coord[0], s_coord[1])))
+                    patch.save(os.path.join(TwoPhase_img_save_dir, '[{},{}].jpg'.format(s_coord[0], s_coord[1])))
 
                 # 绘制热力图
                 kwargs['patch_size'] = patch_size
@@ -198,8 +204,8 @@ class Infer:
                                                                 coords=sample_results['sampled_coords'],
                                                                 **kwargs)
 
-                heatmap.save(heatmap_path.replace('.png', f'_{tag}.png'))
-                original_image.save(marked_image_save_path.replace('.png', f'_{tag}.png'))
+                heatmap.save(heatmap_path.replace('.png', f'_{tag}.jpg'))
+                original_image.save(marked_image_save_path.replace('.png', f'_{tag}.jpg'))
                 return {slide_id: {name: {label_dict[Y_hat]: sample_results['sampled_coords']}}}
             else:
                 return {slide_id: {name: "样本无效!!!"}}
@@ -208,6 +214,7 @@ class Infer:
 
     def process_ais(self, q_ais_in, q_ais_out):
         # ----------------------------- ais -----------------------------
+        self.seg_model = load_Seg_model(self.model_args.seg_model_path, self.model_args.device)
         model = self.load_model(self.model_args.ais)
         patch_level = self.ais_params.patch_level
         patch_size = tuple([self.ais_params.patch_size for i in range(2)])
@@ -225,7 +232,7 @@ class Infer:
                     self.results_ais_hsil_lsil[image_path] = {}
 
                 result = self.infer(image_path, 'ais', patch_level, patch_size, slide_size, model, label_dict,
-                                    seg_params, self.kwargs)
+                                    seg_params, self.seg_model, self.kwargs)
                 q_ais_out.put(result)
             except Exception as e:
                 print(e)
@@ -389,32 +396,34 @@ class Infer:
             p.start()
             self.flag = False
 
-        process_thread2 = Thread(target=self.stage_send, args=(data_dir, self.queues_in, self.queues_out))
-        process_thread2.start()
-        process_thread2.join()
-
-        # self.results["infer_id"] = os.path.split(data_dir)[1][:-4]
-        # self.results[os.path.split(data_dir)[1][:-4]] = self.orig_results
-        #
-        # # 发送图片地址给子进程
-        # for q_in in self.queues_in.values():
-        #     q_in.put(data_dir)
-        #
-        # results = {}
-        # for q_out in self.queues_out.values():
-        #     output = q_out.get()
-        #     if not results:
-        #         results.update(output)
-        #     else:
-        #         results[list(output.keys())[0]].update(list(output.values())[0])
-        # print(results)
-        # self.process_result(os.path.split(data_dir)[1][:-4], results)
-        # print(self.results)
+        # process_thread2 = Thread(target=self.stage_send, args=(data_dir, self.queues_in, self.queues_out))
+        # process_thread2.start()
+        # process_thread2.join()
+        
+        while True:
+            data_dir = input("file path:")
+            self.results["infer_id"] = os.path.split(data_dir)[1][:-4]
+            self.results[os.path.split(data_dir)[1][:-4]] = self.orig_results
+            
+            # 发送图片地址给子进程
+            for q_in in self.queues_in.values():
+                q_in.put(data_dir)
+            
+            results = {}
+            for q_out in self.queues_out.values():
+                output = q_out.get()
+                if not results:
+                    results.update(output)
+                else:
+                    results[list(output.keys())[0]].update(list(output.values())[0])
+            print(results)
+            # self.process_result(os.path.split(data_dir)[1][:-4], results)
+            # print(self.results)
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='inference script')
-    parser.add_argument('--data_dir', type=str, default=r"/home/bavon/datasets/wsi/ais/11/",
+    parser.add_argument('--data_dir', type=str, default=r"/home/bavon/datasets/wsi/normal/data/1-CG23_07703_02.svs",
                         help='svs file')
     parser.add_argument('--save_path', type=str, default="heatmaps/output")
     parser.add_argument('--config_file', type=str, default="infer.yaml")

@@ -219,7 +219,7 @@ class WholeSlideImage(object):
 
     def segmentTissue_new_model(self, seg_level=0, sthresh=20, sthresh_up=255, mthresh=7, close=0, use_otsu=False,
                                 filter_params={'a_t': 100}, ref_patch_size=512, exclude_ids=[], keep_ids=[],
-                                model=None, device='cpu'):
+                                model=None, device='cpu', mask_save_dir=None):
         """
             自动识别并提取出图像中代表组织区域的部分
             通过HSV分割组织->中值阈值->二进制阈值
@@ -272,12 +272,20 @@ class WholeSlideImage(object):
                 hole_contours.append(filtered_holes)
 
             return foreground_contours, hole_contours
-
-        img = np.array(self.wsi.read_region((0, 0), seg_level, self.level_dim[seg_level]))
-        # 将 'RGB' 转换为 'BGR'
-        image = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
-
-        self.img_otsu = piplineone(model, image, device)
+        
+        mask_path = os.path.join(mask_save_dir, self.name, self.name + '_mask.jpg')
+        if os.path.exists(mask_path):
+            img_otsu = cv2.imread(mask_path, 0)
+        else:
+            img = np.array(self.wsi.read_region((0, 0), seg_level, self.level_dim[seg_level]))
+            # 将 'RGB' 转换为 'BGR'
+            image = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
+            
+            img_otsu = piplineone(model, image, self.name, device)
+            
+            if not os.path.exists(os.path.join(mask_save_dir, self.name)):
+                os.makedirs(os.path.join(mask_save_dir, self.name))
+            cv2.imwrite(mask_path, img_otsu)
 
         # 计算缩放比例和参考补丁尺寸
         scale = self.level_downsamples[seg_level]
@@ -287,7 +295,7 @@ class WholeSlideImage(object):
         filter_params['a_h'] = filter_params['a_h'] * scaled_ref_patch_area
 
         # 查找轮廓
-        contours, hierarchy = cv2.findContours(self.img_otsu, cv2.RETR_CCOMP, cv2.CHAIN_APPROX_NONE)
+        contours, hierarchy = cv2.findContours(img_otsu, cv2.RETR_CCOMP, cv2.CHAIN_APPROX_NONE)
         hierarchy = np.squeeze(hierarchy, axis=(0,))[:, 2:]
         if filter_params:
             # 根据参数过滤轮廓和孔洞

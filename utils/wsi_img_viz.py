@@ -347,59 +347,54 @@ def viz_within_dataset():
     # visdom_data(img_data,[])
 
 
-def viz_infer_dataset(results, dataset=None, result_path=None):
-    wsi_obj = dataset.get_wsi_obj()
-    region_size = wsi_obj.level_dimensions[dataset.patch_level]
-    total_img = np.array(wsi_obj.read_region((0, 0), dataset.patch_level, region_size).convert("RGB"))
-    total_img_copy = total_img.copy()
-    name = dataset.single_name
-    patch_size = dataset.patch_size
+def viz_infer_dataset(results, total_img=None, single_name=None, patch_size=None, result_path=None):
+    # wsi_obj = dataset.get_wsi_obj()
+    # region_size = wsi_obj.level_dimensions[dataset.patch_level]
+    # total_img = np.array(wsi_obj.read_region((0, 0), dataset.patch_level, region_size).convert("RGB"))
+    total_img_copy1 = total_img.copy()
+    total_img_copy2 = total_img.copy()
     # 标注颜色
     color_value = (85, 85, 205)
-    # color_value = (255, 0, 0)
 
-    print("size:{}".format(len(dataset)))
-    for i in tqdm(range(len(results))):
-        item = results[i]
-        coord = item["coord"]
-        label = item["pred"]
-        # xyxy format
+    label = np.array([i for i in range(len(results)) if len(results[i]) == 6])
+    coord = np.array([results[i]["coord"] for i in range(len(results))])[label]
+    probs = [i["probs"] for i in results[label]]
+    probs_index = np.where(np.array(probs) >= 95)[0]
+    coord100 = np.array(coord)[probs_index]
+    probs100 = np.array(probs)[probs_index]
+
+    for coord, probs in tqdm(zip(coord100, probs100), total=coord100.shape[0]):
         region = [coord[0], coord[1], coord[0] + patch_size, coord[1] + patch_size]
-        if label > 0:
-            probs = item["probs"]
-            if probs < 93:
-                continue
-            
-            if not os.path.exists(f"{result_path}/{name}/FirstPhase"):
-                os.makedirs(f"{result_path}/{name}/FirstPhase")
-                
-            try:
-                img_ori = total_img_copy[region[1]:region[3], region[0]:region[2], :]
-                img = cv2.resize(img_ori, (patch_size, patch_size))
-                img = cv2.cvtColor(img_ori, cv2.COLOR_RGB2BGR)
-                cv2.imwrite(f"{result_path}/{name}/FirstPhase/{region[0]}_{region[2]}_{region[1]}_{region[3]}_{probs}.jpg",img)
-            except:
-                pass
-            # 画出patch分割框线
-            x_min = region[0]
-            x_max = region[2]
-            y_min = region[1]
-            y_max = region[3]
-            if y_max > total_img.shape[0] or y_min > total_img.shape[0]:
-                continue
-            if x_max > total_img.shape[1] or x_min > total_img.shape[1]:
-                continue
-            
-            # cv2.rectangle(total_img, (region[0], region[1]), (region[2], region[3]), color_value, 2, 2)
-            # add mask by cv2
-            total_img = put_mask(total_img, region, color=color_value)
-            total_img[y_min:y_max, x_min, :] = color_value
-            total_img[y_min:y_max, x_max, :] = color_value
-            total_img[y_min, x_min:x_max, :] = color_value
-            total_img[y_max, x_min:x_max, :] = color_value
-    save_path = os.path.join(result_path, name, "plt_{}.png".format(name))
-    total_img = cv2.cvtColor(total_img, cv2.COLOR_RGB2BGR)
-    cv2.imwrite(save_path, total_img)
+        cv2.rectangle(total_img_copy2, (region[0], region[1]), (region[2], region[3]), (255, 0, 0), 10, 5)
+
+        try:
+            img_ori = total_img_copy1[region[1]:region[3], region[0]:region[2], :]
+            img = cv2.resize(img_ori, (patch_size, patch_size))
+            if not os.path.exists(f"{result_path}/{single_name}/FirstPhase"):
+                os.makedirs(f"{result_path}/{single_name}/FirstPhase")
+            cv2.imwrite(f"{result_path}/{single_name}/FirstPhase/{region[0]}_{region[1]}_{region[2]}_{region[3]}_{probs}.jpg",
+                        img)
+        except:
+            pass
+
+        x_min = region[0]
+        x_max = region[2]
+        y_min = region[1]
+        y_max = region[3]
+        if y_max > total_img.shape[0] or y_min > total_img.shape[0]:
+            continue
+        if x_max > total_img.shape[1] or x_min > total_img.shape[1]:
+            continue
+        total_img = put_mask(total_img, region, color=color_value)
+        total_img[y_min:y_max, x_min, :] = color_value
+        total_img[y_min:y_max, x_max, :] = color_value
+        total_img[y_min, x_min:x_max, :] = color_value
+        total_img[y_max, x_min:x_max, :] = color_value
+
+    save_path_1 = os.path.join(result_path, single_name, "plt_{}.jpg".format(single_name))
+    save_path_2 = os.path.join(result_path, single_name, "plt_copy_{}.jpg".format(single_name))
+    cv2.imwrite(save_path_1, total_img)
+    cv2.imwrite(save_path_2, total_img_copy2)
 
 
 def viz_crop_patch(file_path, name, annotation_xywh, crop_region, patch_level=1, scale=4, viz=None):

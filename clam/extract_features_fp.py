@@ -1,4 +1,3 @@
-from __future__ import print_function
 import sys
 sys.path.append(r'/home/bavon/project/SLFCD/SLFCD/')
 sys.path.append(r'/home/bavon/project/SLFCD/SLFCD/extras/')
@@ -17,12 +16,11 @@ from clam.utils.utils import collate_features
 from utils.file_utils import save_hdf5
 import h5py
 import openslide
-from custom.train_with_clamdata import CoolSystem, get_last_ck_file
+from custom.train_with_clamdata import CoolSystem
 import sys
-
 sys.path.append(os.path.dirname(os.path.abspath(__file__)) + '/../../')
 
-device = torch.device('cuda:0') if torch.cuda.is_available() else torch.device('cpu')
+device = torch.device('cuda:1') if torch.cuda.is_available() else torch.device('cpu')
 
 
 def compute_w_loader(file_path, output_path, wsi, model, batch_size=8, verbose=0,
@@ -107,8 +105,8 @@ if __name__ == '__main__':
 
     print('loading model checkpoint')
     checkpoint_path = os.path.join('..', hparams.work_dir, "checkpoints", hparams.model_name)
-    file_name = get_last_ck_file(checkpoint_path)
-    checkpoint_path_file =  '/home/bavon/project/SLFCD/SLFCD/results/checkpoints/ais_cbam_with_feature630/slfcd-05-val_acc-0.91-temp.ckpt'    #"{}/{}".format(slfcd-01-val_acc-0.91.ckpt)
+    # file_name = get_last_ck_file(checkpoint_path)
+    checkpoint_path_file =  '/home/bavon/project/SLFCD/SLFCD/results/checkpoints/ais_cbam_with_feature/slfcd-15-val_acc-0.95.ckpt'
     print('checkpoint_path_file: ', checkpoint_path_file)
     model = CoolSystem.load_from_checkpoint(checkpoint_path_file).to(device)
     # Remove Fc layer

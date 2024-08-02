@@ -124,7 +124,7 @@ def train(datasets, cur, args):
         from topk.svm import SmoothTop1SVM
         loss_fn = SmoothTop1SVM(n_classes=args.n_classes)
         if device.startswith('cuda'):
-            loss_fn = loss_fn.cuda()
+            loss_fn = loss_fn.to(device)
     else:
         loss_fn = torch.nn.CrossEntropyLoss()
     print('Done!')
@@ -146,7 +146,7 @@ def train(datasets, cur, args):
             from topk.svm import SmoothTop1SVM
             instance_loss_fn = SmoothTop1SVM(n_classes=2)
             if device.startswith('cuda'):
-                instance_loss_fn = instance_loss_fn.cuda()
+                instance_loss_fn = instance_loss_fn.to(device)
         else:
             instance_loss_fn = torch.nn.CrossEntropyLoss()
 
@@ -192,14 +192,14 @@ def train(datasets, cur, args):
 
     for epoch in range(args.max_epochs):
         if args.model_type in ['clam_sb', 'clam_mb'] and not args.no_inst_cluster:
-            train_loop_clam(epoch, model, train_loader, optimizer, args.n_classes, args.bag_weight, writer, loss_fn)
+            train_loop_clam(epoch, model, train_loader, optimizer, args.n_classes, args.bag_weight, writer, loss_fn, device)
             stop = validate_clam(cur, epoch, model, val_loader, args.n_classes,
-                                 early_stopping, writer, loss_fn, args.results_dir)
+                                 early_stopping, writer, loss_fn, args.results_dir, device)
 
         else:
-            train_loop(epoch, model, train_loader, optimizer, args.n_classes, writer, loss_fn)
+            train_loop(epoch, model, train_loader, optimizer, args.n_classes, writer, loss_fn, device)
             stop = validate(cur, epoch, model, val_loader, args.n_classes,
-                            early_stopping, writer, loss_fn, args.results_dir)
+                            early_stopping, writer, loss_fn, args.results_dir, device)
 
         torch.save(model.state_dict(), os.path.join(args.results_dir, "s_{}_checkpoint.pt".format(cur)))
 
@@ -211,11 +211,11 @@ def train(datasets, cur, args):
     else:
         torch.save(model.state_dict(), os.path.join(args.results_dir, "s_{}_checkpoint.pt".format(cur)))
 
-    _, val_error, val_auc, _ = summary(model, val_loader, args.n_classes)
+    _, val_error, val_auc, _ = summary(model, val_loader, args.n_classes, device)
     print('Val error: {:.4f}, ROC AUC: {:.4f}'.format(val_error, val_auc))
 
-    results_dict, test_error, test_auc, acc_logger = summary(model, test_loader, args.n_classes)
-    print('Test error: {:.4f}, ROC AUC: {:.4f}'.format(test_error, test_auc))
+    results_dict, test_error, test_auc, acc_logger = summary(model, test_loader, args.n_classes, device)
+    print('Test error: {:.4f}, ROC AUC: {:.4f}'.format(test_error, test_auc)) 
 
     for i in range(args.n_classes):
         acc, correct, count = acc_logger.get_summary(i)
@@ -233,10 +233,10 @@ def train(datasets, cur, args):
     return results_dict, test_auc, val_auc, 1 - test_error, 1 - val_error
 
 
-def train_loop_clam(epoch, model, loader, optimizer, n_classes, bag_weight, writer=None, loss_fn=None):
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    model = model.to(device)
+def train_loop_clam(epoch, model, loader, optimizer, n_classes, bag_weight, writer=None, loss_fn=None, device=None):
+    # device = torch.device("cuda:1" if torch.cuda.is_available() else "cpu")
     model.train()
+    model = model.to(device)
     acc_logger = Accuracy_Logger(n_classes=n_classes)
     inst_logger = Accuracy_Logger(n_classes=n_classes)
 
@@ -310,8 +310,8 @@ def train_loop_clam(epoch, model, loader, optimizer, n_classes, bag_weight, writ
         writer.add_scalar('train/clustering_loss', train_inst_loss, epoch)
 
 
-def train_loop(epoch, model, loader, optimizer, n_classes, writer=None, loss_fn=None):
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+def train_loop(epoch, model, loader, optimizer, n_classes, writer=None, loss_fn=None, device=None):
+    # device = torch.device("cuda:1" if torch.cuda.is_available() else "cpu")
     model.train()
     acc_logger = Accuracy_Logger(n_classes=n_classes)
     train_loss = 0.
@@ -357,8 +357,8 @@ def train_loop(epoch, model, loader, optimizer, n_classes, writer=None, loss_fn=
         writer.add_scalar('train/error', train_error, epoch)
 
 
-def validate(cur, epoch, model, loader, n_classes, early_stopping=None, writer=None, loss_fn=None, results_dir=None):
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+def validate(cur, epoch, model, loader, n_classes, early_stopping=None, writer=None, loss_fn=None, results_dir=None, device=None):
+    # device = torch.device("cuda:1" if torch.cuda.is_available() else "cpu")
     model.eval()
     acc_logger = Accuracy_Logger(n_classes=n_classes)
     # loader.dataset.update_mode(True)
@@ -416,8 +416,8 @@ def validate(cur, epoch, model, loader, n_classes, early_stopping=None, writer=N
 
 
 def validate_clam(cur, epoch, model, loader, n_classes, early_stopping=None, writer=None, loss_fn=None,
-                  results_dir=None):
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+                  results_dir=None, device=None):
+    # device = torch.device("cuda:1" if torch.cuda.is_available() else "cpu")
     model = model.to(device)
     model.eval()
     acc_logger = Accuracy_Logger(n_classes=n_classes)
@@ -507,8 +507,8 @@ def validate_clam(cur, epoch, model, loader, n_classes, early_stopping=None, wri
     return False
 
 
-def summary(model, loader, n_classes):
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+def summary(model, loader, n_classes, device):
+    # device = torch.device("cuda:1" if torch.cuda.is_available() else "cpu")
     acc_logger = Accuracy_Logger(n_classes=n_classes)
     model.eval()
     test_loss = 0.

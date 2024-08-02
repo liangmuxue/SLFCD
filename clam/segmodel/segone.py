@@ -206,7 +206,7 @@ class MyZip(object):
         return ret[:]
 
 
-def gen_mask(model, img, device):
+def gen_mask(model, img, file_name, device):
     img_size = 224
     stride = 56
     batchsize = 512
@@ -215,7 +215,7 @@ def gen_mask(model, img, device):
     mask = np.zeros(img.shape[0:2], dtype=np.uint8)
     transform = transforms.Compose([transforms.ToTensor()])
     with torch.no_grad():
-        for num, ind in tqdm(enumerate(indx_zip), desc='seg img', total=len(indx_zip)):
+        for num, ind in tqdm(enumerate(indx_zip), desc=f'seg img {file_name}', total=len(indx_zip)):
             inds = ind[0]
             input_img_list = []
             for _ind in inds:
@@ -231,9 +231,9 @@ def gen_mask(model, img, device):
     return mask
 
 
-def piplineone(model, img, device):
+def piplineone(model, img, file_name, device):
     img = np.pad(img, ((224, 224), (224, 224), (0, 0)), mode='reflect')
-    mask = gen_mask(model, img, device)
+    mask = gen_mask(model, img, file_name, device)
     ostu_mask = ostu_seg_tissue(img)
     mask = mask * (ostu_mask > 0)
     mask = mask[224:mask.shape[0] - 224, 224:mask.shape[1] - 224]
