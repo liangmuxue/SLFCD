@@ -1,30 +1,41 @@
-import sys
-sys.path.append(r'/home/bavon/project/SLFCD/SLFCD/')
-sys.path.append(r'/home/bavon/project/SLFCD/SLFCD/extras/')
-sys.path.append(r'/home/bavon/project/SLFCD/SLFCD/project/')
+# The path can also be read from a config file, etc.
+import shutil
+
+OPENSLIDE_PATH = r'D:\BaiduNetdiskDownload\openslide-bin-4.0.0.3-windows-x64\bin'
+
+import os
+
+if hasattr(os, 'add_dll_directory'):
+    # Python >= 3.8 on Windows
+    with os.add_dll_directory(OPENSLIDE_PATH):
+        import openslide
+else:
+    import openslide
+
+
 import torch
 import os
 import time
 import json
 from argparse import Namespace
 import torchvision.transforms as transforms
+from torch import nn
 
-from clam.datasets.dataset_h5 import Dataset_Combine_Bags, Whole_Slide_Bag_FP
+from clam.datasets.dataset_h5 import Dataset_Combine_Bags, Whole_Slide_Bag_FP, Whole_Slide_Bag_FP_all
 from torch.utils.data import DataLoader
 import argparse
 from clam.utils.utils import collate_features
 from utils.file_utils import save_hdf5
 import h5py
 import openslide
-from custom.train_with_clamdata import CoolSystem
-import sys
-sys.path.append(os.path.dirname(os.path.abspath(__file__)) + '/../../')
+from custom.train_with_clamdata import CoolSystem, get_last_ck_file
 
 device = torch.device('cuda:1') if torch.cuda.is_available() else torch.device('cpu')
 
 
 def compute_w_loader(file_path, output_path, wsi, model, batch_size=8, verbose=0,
-                     print_every=20, pretrained=True, custom_downsample=1, target_patch_size=-1):
+                     print_every=20, pretrained=True, custom_downsample=1, target_patch_size=-1,
+                     patch_level=1, patch_size=256, slide_size=128):
     """
     args:
         file_path: directory of bag (.h5 file)
@@ -36,17 +47,19 @@ def compute_w_loader(file_path, output_path, wsi, model, batch_size=8, verbose=0
         custom_downsample: custom defined downscale factor of image patches
         target_patch_size: custom defined, rescaled image size before embedding
     """
-    custom_transforms = transforms.Compose([
+    transform = transforms.Compose([
         transforms.ToTensor(),
         transforms.Resize(224),
     ])
 
-    dataset = Whole_Slide_Bag_FP(file_path=file_path, wsi=wsi, pretrained=pretrained,
-                                 custom_transforms=custom_transforms, custom_downsample=custom_downsample,
-                                 target_patch_size=target_patch_size)
+    # dataset = Whole_Slide_Bag_FP(file_path=file_path, wsi=wsi, pretrained=pretrained,
+    #                              custom_transforms=custom_transforms, custom_downsample=custom_downsample,
+    #                              target_patch_size=target_patch_size)
+    # kwargs = {'num_workers': 4, 'pin_memory': True} if device.type == "cuda:1" else {}
+    # loader = DataLoader(dataset=dataset, batch_size=batch_size, **kwargs, collate_fn=collate_features)
 
-    kwargs = {'num_workers': 4, 'pin_memory': True} if device.type == "cuda" else {}
-    loader = DataLoader(dataset=dataset, batch_size=batch_size, **kwargs, collate_fn=collate_features)
+    dataset = Whole_Slide_Bag_FP_all(file_path, wsi, patch_level, patch_size, slide_size, transform)
+    loader = DataLoader(dataset=dataset, batch_size=batch_size, pin_memory=True, num_workers=2)
 
     if verbose > 0:
         print('processing {}: total of {} batches'.format(file_path, len(loader)))
@@ -64,20 +77,28 @@ def compute_w_loader(file_path, output_path, wsi, model, batch_size=8, verbose=0
             asset_dict = {'features': features, 'coords': coords}
             save_hdf5(output_path, asset_dict, attr_dict=None, mode=mode)
             mode = 'a'
-    return output_path
+
+    # 保存为pt
+    file = h5py.File(output_path, "r")
+    features = file['features'][:]
+    print('features size: ', features.shape)
+    print('coordinates size: ', file['coords'].shape)
+    features = torch.from_numpy(features)
+    torch.save(features, fea_file_path)
 
 
 parser = argparse.ArgumentParser(description='Feature Extraction')
-parser.add_argument('--data_dir', type=str, default='/home/bavon/datasets/wsi')
+parser.add_argument('--data_dir', type=str, default='D:/project/SLFCD/dataset')
 parser.add_argument('--mode', type=str, default="ais")
-parser.add_argument('--level', type=int, default=1)
-parser.add_argument('--slide_ext', type=str, default='.svs')
-parser.add_argument('--types', type=str, default='ais,normal')
-parser.add_argument('--feat_dir', type=str, default='/home/bavon/datasets/wsi/combine/features')
-parser.add_argument('--batch_size', type=int, default=256)
-parser.add_argument('--no_auto_skip', default=False, action='store_true')
+parser.add_argument('--patch_level', type=int, default=1)
+parser.add_argument('--patch_size', type=int, default=256)
+parser.add_argument('--slide_size', type=int, default=128)
+parser.add_argument('--patch_size', type=int, default=256)
 parser.add_argument('--custom_downsample', type=int, default=1)
 parser.add_argument('--target_patch_size', type=int, default=-1)
+parser.add_argument('--slide_ext', type=str, default='.svs')
+parser.add_argument('--types', type=str, default='ais,normal')
+parser.add_argument('--feat_dir', type=str, default='D:/project/SLFCD/dataset/combine/features')
 args = parser.parse_args()
 
 if __name__ == '__main__':
@@ -95,30 +116,33 @@ if __name__ == '__main__':
 
     os.makedirs(args.feat_dir, exist_ok=True)
     for type in types:
+        if os.path.exists(os.path.join(args.feat_dir, 'pt_files', type)):
+            shutil.rmtree(os.path.join(args.feat_dir, 'pt_files', type))
         os.makedirs(os.path.join(args.feat_dir, 'pt_files', type), exist_ok=True)
+        print("pt_files: ", os.path.join(args.feat_dir, 'pt_files'))
+
+        if os.path.exists(os.path.join(args.feat_dir, 'h5_files', type)):
+            shutil.rmtree(os.path.join(args.feat_dir, 'h5_files', type))
         os.makedirs(os.path.join(args.feat_dir, 'h5_files', type), exist_ok=True)
-    print("pt_files: ", os.path.join(args.feat_dir, 'pt_files'))
-    print("h5_files: ", os.path.join(args.feat_dir, 'h5_files'))
+        print("h5_files: ", os.path.join(args.feat_dir, 'h5_files'))
 
     dest_files = os.listdir(os.path.join(args.feat_dir, 'pt_files'))
     print("dest_files: ", dest_files)
 
     print('loading model checkpoint')
     checkpoint_path = os.path.join('..', hparams.work_dir, "checkpoints", hparams.model_name)
-    # file_name = get_last_ck_file(checkpoint_path)
-    checkpoint_path_file =  '/home/bavon/project/SLFCD/SLFCD/results/checkpoints/ais_cbam_with_feature/slfcd-15-val_acc-0.95.ckpt'
-    print('checkpoint_path_file: ', checkpoint_path_file)
+    file_name = get_last_ck_file(checkpoint_path)
+    checkpoint_path_file = "{}/{}".format(checkpoint_path, file_name)
     model = CoolSystem.load_from_checkpoint(checkpoint_path_file).to(device)
+    model.eval()
     # Remove Fc layer
     # model = torch.nn.Sequential(*(list(model.model.children())[:-1]))
 
     # if torch.cuda.device_count() > 1:
-    # 	model = nn.DataParallel(model)
+    #     model = nn.DataParallel(model)
 
-    model.eval()
-    total = len(bags_dataset)
-    print("total: ", total)
-    for bag_candidate_idx in range(total):
+    for bag_candidate_idx in range(len(bags_dataset)):
+        print('progress: {}/{}'.format(bag_candidate_idx, len(bags_dataset)))
         type, slide_id = bags_dataset[bag_candidate_idx]
         data_slide_dir = os.path.join(data_path, type, "data")
         data_h5_dir = os.path.join(data_path, type, "patches_level{}".format(args.level))
@@ -128,41 +152,23 @@ if __name__ == '__main__':
         bag_base, _ = os.path.splitext(bag_name)
         fea_file_path = os.path.join(args.feat_dir, 'pt_files', type, bag_base + '.pt')
 
-        # if os.path.exists(fea_file_path):
-        #     print("file exists:{}".format(fea_file_path))
-        #     continue
-
         h5_file_path = os.path.join(data_h5_dir, bag_name)
         slide_file_path = os.path.join(data_slide_dir, slide_id + args.slide_ext)
-        print('\nprogress: {}/{}'.format(bag_candidate_idx, total))
-
-        # if not args.no_auto_skip and slide_id + '.pt' in dest_files:
-        #     print('skipped {}'.format(slide_id))
-        #     continue
 
         output_path = os.path.join(args.feat_dir, 'h5_files', type, bag_name)
         print("output_path: ", output_path)
-        time_start = time.time()
+
         wsi = openslide.open_slide(slide_file_path)
         try:
-            output_file_path = compute_w_loader(h5_file_path, output_path, wsi, model=model,
-                                                batch_size=args.batch_size, verbose=1, print_every=20,
-                                                custom_downsample=args.custom_downsample,
-                                                target_patch_size=args.target_patch_size)
+            compute_w_loader(h5_file_path, output_path, wsi, model=model,
+                             batch_size=args.batch_size, verbose=1, print_every=20,
+                             custom_downsample=args.custom_downsample,
+                             target_patch_size=args.target_patch_size,
+                             patch_level=args.patch_level,
+                             patch_size=args.patch_size,
+                             slide_size=args.slide_size)
+
         except Exception as e:
             print("compute_w_loader fail:{} {}".format(bag_name, e))
             continue
-
-        time_elapsed = time.time() - time_start
-        print("output_file_path: ", output_file_path)
-
-        print('\ncomputing features for {} took {} s'.format(output_file_path, time_elapsed))
-
-        # 保存为pt
-        file = h5py.File(output_file_path, "r")
-        features = file['features'][:]
-        print('features size: ', features.shape)
-        print('coordinates size: ', file['coords'].shape)
-        features = torch.from_numpy(features)
-        torch.save(features, fea_file_path)
     print("process successful!!!")

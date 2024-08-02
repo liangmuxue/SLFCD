@@ -1,6 +1,10 @@
 from __future__ import print_function, division
 import os
+
+import cv2
+import numpy as np
 import pandas as pd
+import torch
 
 from torch.utils.data import Dataset
 from torchvision import transforms
@@ -113,7 +117,7 @@ class Whole_Slide_Bag_FP(Dataset):
                 self.target_patch_size = (self.patch_size // custom_downsample,) * 2
             else:
                 self.target_patch_size = None
-        self.summary()
+        # self.summary()
 
     def __len__(self):
         return self.length
@@ -138,6 +142,48 @@ class Whole_Slide_Bag_FP(Dataset):
             img = img.resize(self.target_patch_size)
         img = self.roi_transforms(img).unsqueeze(0)
         return img, coord
+
+
+class Whole_Slide_Bag_FP_all(Dataset):
+    def __init__(self, file_path, wsi, patch_level, patch_size, slide_size, transforms=None):
+        self.file_path = file_path
+        self.wsi = wsi
+        self.patch_level = patch_level
+        self.patch_size = patch_size
+        self.slide_size = slide_size
+        self.transforms = transforms
+
+        slide_length = self.patch_size // self.slide_size
+
+        image = np.array(wsi.read_region((0, 0), self.patch_level, wsi.level_dimensions[self.patch_level]))
+        self.image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
+        scale, shape = wsi.level_downsamples[self.patch_level], wsi.level_dimensions[self.patch_level]
+
+        self.patches_bag_list = []
+        with h5py.File(self.file_path, "r") as f:
+            coords = np.array(f['coords'])
+            for coord in coords:
+                coord = np.array(coord / scale).astype(np.int32)
+                for j in range(slide_length):
+                    for k in range(slide_length):
+                        coord_tar = np.array([coord[0] + j * self.patch_size, coord[1] + k * self.patch_size]).astype(
+                            np.int16)
+                        coord_tar = [coord_tar[0], coord_tar[1], coord_tar[0] + self.patch_size,
+                                     coord_tar[1] + self.patch_size]
+                        if coord_tar[2] < shape[0] and coord_tar[3] < shape[1]:
+                            self.patches_bag_list.append(coord_tar)
+
+    def __len__(self):
+        return self.patches_bag_list
+
+    def __getitem__(self, idx):
+        coord_tar = self.patches_bag_list[idx]
+        img = self.image[coord_tar[1]:coord_tar[3], coord_tar[0]:coord_tar[2], :]
+
+        img_tar = cv2.resize(img, (224, 224))
+        if self.transforms:
+            img_tar = self.transforms(img_tar)
+        return img_tar, torch.tensor(coord_tar)
 
 
 class Dataset_All_Bags(Dataset):
