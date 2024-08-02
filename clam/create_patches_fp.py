@@ -172,13 +172,13 @@ def seg_and_patch(source, save_dir, patch_save_dir, mask_save_dir, stitch_save_d
                 WSI_object = segment(WSI_object, current_seg_params, current_filter_params)
             else:
                 WSI_object.segmentTissue_new_model(**current_seg_params, filter_params=current_filter_params,
-                                                   model=model, device=device)
-                mask_path = os.path.join(mask_save_dir, slide_id + '.png')
-                cv2.imwrite(mask_path, WSI_object.img_otsu)
+                                                   model=model, device=device, mask_save_dir=mask_save_dir)
 
         if save_mask:
             mask = WSI_object.visWSI(**current_vis_params)
-            mask_path = os.path.join(mask_save_dir, slide_id + '.jpg')
+            if not os.path.exists(os.path.join(mask_save_dir, slide_id)):
+                os.makedirs(os.path.join(mask_save_dir, slide_id))
+            mask_path = os.path.join(mask_save_dir, slide_id, slide_id + '.jpg')
             mask.save(mask_path)
 
         # 这一步是最主要的，将标注区域保存为h5
@@ -188,7 +188,7 @@ def seg_and_patch(source, save_dir, patch_save_dir, mask_save_dir, stitch_save_d
                  'save_path': patch_save_dir})
             patching(WSI_object=WSI_object, **current_patch_params)
             df.loc[idx, 'status'] = 'failed_seg'
-            # continue
+            continue
 
         file_path = os.path.join(patch_save_dir, slide_id + '.h5')
         if stitch:
@@ -208,11 +208,11 @@ def seg_and_patch(source, save_dir, patch_save_dir, mask_save_dir, stitch_save_d
 
 
 parser = argparse.ArgumentParser(description='seg and patch')
-parser.add_argument('--source', type=str, default=r"/home/bavon/datasets/wsi/ais/",
+parser.add_argument('--source', type=str, default=r"/home/bavon/datasets/wsi/ais",
                     help='path to folder containing raw wsi image files')
 parser.add_argument('--step_size', type=int, default=64, help='step_size')
 parser.add_argument('--patch_size', type=int, default=256, help='patch_size')
-parser.add_argument('--seg_model', type=bool, default=True, help='seg model True or False')
+parser.add_argument('--seg_model', type=bool, default=False, help='seg model True or False')
 parser.add_argument('--seg_model_path', type=str, default=r'/home/bavon/project/SLFCD/SLFCD/clam/segmodel/epoch-30.pth', help='seg model path')
 parser.add_argument('--device', type=str, default='cuda:1', help='gpu or cpu')
 parser.add_argument('--patch', default=True, action='store_true')
@@ -297,7 +297,11 @@ if __name__ == '__main__':
                   'vis_params': vis_params}
 
     print("parameters: ", parameters)
-    model = load_Seg_model(args.seg_model_path, args.device)
+    
+    model = None
+    if args.seg_model:
+        model = load_Seg_model(args.seg_model_path, args.device)
+    
 
     seg_and_patch(**directories, **parameters, patch_size=args.patch_size, step_size=args.step_size,
                   seg=args.seg, use_default_params=False, save_mask=True, stitch=args.stitch,
