@@ -4,6 +4,7 @@ import numpy as np
 import cv2
 import openslide
 import h5py
+import torch
 from .dataset_combine import Whole_Slide_Bag_COMBINE
 
 
@@ -113,9 +114,6 @@ class Whole_Slide_Bag_Infer_all(Whole_Slide_Bag_COMBINE):
         self.file_path = file_path
         self.single_name = single_name
         self.transform = transform
-
-        # if not os.path.exists(f"{result_path}/{single_name}/infer"):
-        #     os.makedirs(f"{result_path}/{single_name}/infer")
             
         # 处理单独文件
         patch_file = os.path.join(file_path, "patches_level{}".format(patch_level), single_name + ".h5")
@@ -123,12 +121,11 @@ class Whole_Slide_Bag_Infer_all(Whole_Slide_Bag_COMBINE):
 
         # 直接读取wsi文件，并根据h5中存储的坐标点进行分割
         wsi_data = openslide.open_slide(wsi_file)
-        scale = wsi_data.level_downsamples[patch_level]
+        scale, shape = wsi_data.level_downsamples[patch_level], wsi_data.level_dimensions[patch_level]
         slide_length = patch_size // slide_size
 
         image = np.array(wsi_data.read_region((0, 0), self.patch_level, wsi_data.level_dimensions[self.patch_level]))
         self.image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
-        orig_img = self.image.copy()
         self.patches_bag_list = []
         with h5py.File(patch_file, "r") as f:
             patch_coords = np.array(f['coords'])
@@ -138,13 +135,11 @@ class Whole_Slide_Bag_Infer_all(Whole_Slide_Bag_COMBINE):
                 for j in range(slide_length):
                     for k in range(slide_length):
                         coord_tar = np.array([coord[0] + j * patch_size, coord[1] + k * patch_size]).astype(np.int16)
-                        img = self.image[coord_tar[1]:coord_tar[1] + self.patch_size,
-                                         coord_tar[0]:coord_tar[0] + self.patch_size, :]
-                        if img.any():
-                            # cv2.putText(orig_img, "1", coord, cv2.FONT_HERSHEY_SIMPLEX, 20, color=(0, 0, 0), thickness=10)
+                        coord_tar = [coord_tar[0], coord_tar[1], coord_tar[0] + patch_size,
+                                     coord_tar[1] + patch_size]
+                        if coord_tar[2] < shape[0] and coord_tar[3] < shape[1]:
                             self.patches_bag_list.append(coord_tar)
-                            # cv2.imwrite(f"{result_path}/{single_name}/infer/{coord}_{j}_{k}.jpg", img)
-        # cv2.imwrite(f"{result_path}/{single_name}/{single_name}_img.jpg", orig_img)
+
 
     def __len__(self):
         return len(self.patches_bag_list)
@@ -157,5 +152,5 @@ class Whole_Slide_Bag_Infer_all(Whole_Slide_Bag_COMBINE):
         img = cv2.resize(img, (224, 224))
         img_tar = self.transform(img)
 
-        return img_tar, coord_tar
+        return img_tar, torch.tensot(coord_tar)
 
