@@ -1,3 +1,6 @@
+import sys
+sys.path.append('/home/bavon/project/SLFCD/SLFCD')
+sys.path.append('/home/bavon/project/SLFCD/SLFCD/project')
 import os
 import argparse
 import json
@@ -8,16 +11,19 @@ from torchvision import models
 from torch import nn
 import torchvision.transforms as transforms
 
-import torch
 import torch.nn.functional as F
 import pytorch_lightning as pl
 from pytorch_lightning import loggers as pl_loggers
 from pytorch_lightning.callbacks import ModelCheckpoint
 import numpy as np
 
-from clam.datasets.dataset_combine import Whole_Slide_Bag_COMBINE
+from clam.datasets.dataset_combine import Whole_Slide_Bag_COMBINE, Whole_Slide_Bag_COMBINE_all
 from utils.constance import get_label_cate, get_label_cate_num
 from custom.model.cbam_ext import ResidualNet
+import cv2
+
+import torch
+torch.backends.cudnn.enabled = False
 
 import warnings
 warnings.filterwarnings('ignore')
@@ -31,6 +37,7 @@ viz_normal_train = Visdom(env="normal_train")
 viz_normal_valid = Visdom(env="normal_valid")
 
 device = 'cuda:1'
+
 
 def chose_model(model_name, num_classes, image_size=512):
     if model_name == 'resnet18':
@@ -53,11 +60,10 @@ class CoolSystem(pl.LightningModule):
     def __init__(self, hparams):
         super(CoolSystem, self).__init__()
         self.params = hparams
-        
+
         # define the model
         self.model = chose_model(hparams.model, len(get_label_cate(mode=hparams.mode)), image_size=hparams.image_size)
         self.model = self.model.to(device)
-
         self.loss_fn = nn.CrossEntropyLoss().to(device)
         self.save_hyperparameters()
 
@@ -75,7 +81,7 @@ class CoolSystem(pl.LightningModule):
         # optimizer.param_groups[0]['capturable'] = True
         # scheduler = torch.optim.lr_scheduler.StepLR(optimizer=optimizer, gamma=0.3, step_size=5)
         scheduler = torch.optim.lr_scheduler.CyclicLR(optimizer=optimizer, cycle_momentum=False, base_lr=1e-5,
-                                                      max_lr=1e-4, step_size_up=20)
+                                                      max_lr=1e-3, step_size_up=10000, step_size_down=10000)
         # scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer=optimizer,T_max=16,eta_min=1e-4)
 
         return [optimizer], [scheduler]
@@ -84,9 +90,6 @@ class CoolSystem(pl.LightningModule):
         """training"""
         x, y, item, img_ori = batch
         x, y = x.to(device), y.to(device)
-        # y = y.type(torch.long)
-
-        # self.model = self.model.to(device)
 
         output_feature, output_fc = self.model.forward(x)
         output = torch.squeeze(output_fc, dim=-1)
@@ -105,21 +108,20 @@ class CoolSystem(pl.LightningModule):
         tumor_index = torch.where(y > 0)[0]
         for index in tumor_index:
             if np.random.randint(1, 50) == 3:
-                self._viz_sample(img_ori, y, index, viz=viz_tumor_train)
+                corr = (predicts[index] == 1)
+                self._viz_sample(img_ori, y, index, viz=viz_tumor_train, corr=corr)
 
         normal_index = torch.where(y == 0)[0]
         for index in normal_index:
             if np.random.randint(1, 50) == 3:
-                self._viz_sample(img_ori, y, index, viz=viz_normal_train)
+                corr = (predicts[index] == 0)
+                self._viz_sample(img_ori, y, index, viz=viz_normal_train, corr=corr)
         return {'loss': loss_fn, 'train_acc': acc}
-
-    def validation_step(self, batch, batch_idx):
+        
+    def validation_step(self, batch, batch_idx):        
         x, y, item, img_ori = batch
         x, y = x.to(device), y.to(device)
-        # y = y.type(torch.long)
-
-        # self.model = self.model.to(device)
-
+        
         # 特征和标签
         output_feature, output_fc = self.model.forward(x)
         output = torch.squeeze(output_fc, dim=-1)
@@ -129,6 +131,7 @@ class CoolSystem(pl.LightningModule):
         predicts = F.softmax(output, dim=-1)
         predicts = torch.max(predicts, dim=-1)[1]
         pred_acc_bool = (predicts == y)
+        
         # 总 acc
         acc = pred_acc_bool.type(torch.float).sum().data * 1.0 / self.params.batch_size
 
@@ -217,17 +220,24 @@ class CoolSystem(pl.LightningModule):
             transforms.RandomHorizontalFlip(),
             # transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
         ])
-        dataset_train = Whole_Slide_Bag_COMBINE(file_path, wsi_path, mask_path, work_type="train", mode=self.params.mode,
-                                                patch_path=self.params.patch_path, transform=trans,
-                                                patch_size=self.params.image_size, split_data=split_data,
-                                                patch_level=self.params.patch_level, save_slide=self.params.save_slide)
+
+        # dataset_train = Whole_Slide_Bag_COMBINE(file_path, wsi_path, mask_path, work_type="train", mode=self.params.mode,
+        #                                         patch_path=self.params.patch_path, transform=trans,
+        #                                         patch_size=self.params.image_size, split_data=split_data,
+        #                                         patch_level=self.params.patch_level)
+
+        dataset_train = Whole_Slide_Bag_COMBINE_all(file_path, wsi_path, mask_path, work_type="train",
+                                                    transform=trans,
+                                                    image_size=self.params.image_size, 
+                                                    split_data=split_data,
+                                                    patch_level=self.params.patch_level)
+
         train_loader = DataLoader(dataset_train,
                                   batch_size=self.params.batch_size,
                                   collate_fn=self._collate_fn,
                                   shuffle=True,
-                                  num_workers=self.params.num_workers, 
-                                  pin_memory=False)
-        # data_summarize(train_loader)
+                                  num_workers=self.params.num_workers,
+                                  pin_memory=True)
         return train_loader
 
     def val_dataloader(self):
@@ -243,17 +253,24 @@ class CoolSystem(pl.LightningModule):
             transforms.Resize(224),
             # transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
         ])
-        
-        dataset_valid = Whole_Slide_Bag_COMBINE(file_path, wsi_path, mask_path, work_type="valid", mode=self.params.mode,
-                                                patch_path=self.params.patch_path, transform=trans,
-                                                patch_size=self.params.image_size, split_data=split_data,
-                                                patch_level=self.params.patch_level, save_slide=self.params.save_slide)
+
+        # dataset_valid = Whole_Slide_Bag_COMBINE(file_path, wsi_path, mask_path, work_type="valid", mode=self.params.mode,
+        #                                         patch_path=self.params.patch_path, transform=trans,
+        #                                         patch_size=self.params.image_size, split_data=split_data,
+        #                                         patch_level=self.params.patch_level)
+
+        dataset_valid = Whole_Slide_Bag_COMBINE_all(file_path, wsi_path, mask_path, work_type="val",
+                                                    transform=trans,
+                                                    image_size=self.params.image_size, 
+                                                    split_data=split_data,
+                                                    patch_level=self.params.patch_level)
+
         val_loader = DataLoader(dataset_valid,
                                 batch_size=self.params.batch_size,
                                 collate_fn=self._collate_fn,
                                 shuffle=False,
                                 num_workers=self.params.num_workers,
-                                pin_memory=False)
+                                pin_memory=True)
         return val_loader
 
     def _collate_fn(self, batch):
@@ -310,8 +327,7 @@ def main(hparams):
     )
 
     if hparams.load_weight:
-        file_name = get_last_ck_file(checkpoint_path)
-        checkpoint_path_file = "{}/{}".format(checkpoint_path, file_name)
+        checkpoint_path_file = '/home/bavon/project/SLFCD/SLFCD/results/checkpoints/hsil_cbam_with_feature/slfcd-13-val_acc-0.82.ckpt'
         model = CoolSystem.load_from_checkpoint(checkpoint_path_file).to(device)
         trainer = pl.Trainer(
             max_epochs=hparams.epochs,
@@ -325,7 +341,6 @@ def main(hparams):
     else:
         model = CoolSystem(hparams)
         model = model.to(device)
-        # data_summarize(model.val_dataloader())
         trainer = pl.Trainer(
             max_epochs=hparams.epochs,
             gpus=[int(hparams.device_ids)],
