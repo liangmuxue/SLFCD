@@ -208,7 +208,7 @@ def seg_and_patch(source, save_dir, patch_save_dir, mask_save_dir, stitch_save_d
 
 
 parser = argparse.ArgumentParser(description='seg and patch')
-parser.add_argument('--source', type=str, default=r"/home/bavon/datasets/wsi/ais",
+parser.add_argument('--source', type=str, default=r"/home/bavon/datasets/wsi/normal",
                     help='path to folder containing raw wsi image files')
 parser.add_argument('--step_size', type=int, default=64, help='step_size')
 parser.add_argument('--patch_size', type=int, default=256, help='patch_size')
@@ -217,8 +217,8 @@ parser.add_argument('--seg_model_path', type=str, default=r'/home/bavon/project/
 parser.add_argument('--device', type=str, default='cuda:1', help='gpu or cpu')
 parser.add_argument('--patch', default=True, action='store_true')
 parser.add_argument('--seg', default=True, action='store_true')
-parser.add_argument('--stitch', default=True, action='store_true')
-parser.add_argument('--save_dir', type=str, default=r"/home/bavon/datasets/wsi/ais",
+parser.add_argument('--stitch', default=False, action='store_true')
+parser.add_argument('--save_dir', type=str, default=r"/home/bavon/datasets/wsi/normal",
                     help='directory to save processed data')
 parser.add_argument('--preset', default=None, type=str,
                     help='predefined profile of default segmentation and filter parameters (.csv)')

@@ -174,7 +174,7 @@ class Whole_Slide_Bag_FP_all(Dataset):
                             self.patches_bag_list.append(coord_tar)
 
     def __len__(self):
-        return self.patches_bag_list
+        return len(self.patches_bag_list)
 
     def __getitem__(self, idx):
         coord_tar = self.patches_bag_list[idx]
@@ -184,8 +184,8 @@ class Whole_Slide_Bag_FP_all(Dataset):
         if self.transforms:
             img_tar = self.transforms(img_tar)
         return img_tar, torch.tensor(coord_tar)
-
-
+    
+    
 class Dataset_All_Bags(Dataset):
     def __init__(self, csv_path):
         self.df = pd.read_csv(csv_path)
