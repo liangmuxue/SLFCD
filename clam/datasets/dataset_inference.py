@@ -152,5 +152,5 @@ class Whole_Slide_Bag_Infer_all(Whole_Slide_Bag_COMBINE):
         img = cv2.resize(img, (224, 224))
         img_tar = self.transform(img)
 
-        return img_tar, torch.tensot(coord_tar)
+        return img_tar, torch.tensor(coord_tar)
 
