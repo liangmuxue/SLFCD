@@ -42,7 +42,7 @@ parser.add_argument('--root_url', type=str, default="192.168.0.98")
 parser.add_argument('--root_port', type=int, default=8088)
 parser.add_argument('--receive_port', type=str, default=8091)
 parser.add_argument('--config_file', type=str, default="infer.yaml")
-parser.add_argument('--device', type=str, default="cuda:0")
+parser.add_argument('--device', type=str, default="cuda:1")
 args = parser.parse_args()
 root_url, root_port, receive_port = args.root_url, args.root_port, args.receive_port
 
@@ -401,9 +401,9 @@ class Infer:
 
             if not stage_send_queue_multi.empty():
                 stage_send_queue_multi.get()
-            print("stage 4 推理结果处理完成，样本有效")
             stage_send_queue_multi.put({'sampleId': file_id, 'state': 4})
             svs_output_queue.put(self.results)
+            print("stage 4 推理结果处理完成，样本有效")
         except:
             if not stage_send_queue_multi.empty():
                 stage_send_queue_multi.get()
@@ -452,16 +452,17 @@ def stage_send(stage_send_queue_multi):
         try:
             if not stage_send_queue_multi.empty():
                 results = stage_send_queue_multi.get()
+                print("stage: ", results)
                 req = urllib.request.Request(url=f'http://{root_url}:{receive_port}/system/job/stageSend',
                                              data=json.dumps(results).encode('utf-8'),
                                              headers={"Content-Type": "application/json"})
                 res = urllib.request.urlopen(req)
                 res = res.read().decode("utf-8")
                 res = json.loads(res)
-                print("status_code: ", results, res)
+                print("status_code: ", res)
         except Exception as e:
             # 打印异常信息
-            print(traceback.format_exc())
+            print('error: ', e)
 
 
 @app.route('/upload_svs_file', methods=['POST'])
@@ -502,7 +503,6 @@ def download_SVS():
         print("upload 0 文件上传成功")
         return jsonify({'error': 0}), 200
     except Exception as e:
-        print(traceback.format_exc())
         print("upload 3 当前状态异常")
         return jsonify({'error': 3, 'message': e}), 500
 
@@ -512,12 +512,12 @@ def process_and_send_results():
     try:
         data = request.get_json()
         file_id = data.get('sampleId')
-        results = svs_output_queue.get()
-        print(results, results[file_id])
-        return jsonify(results[file_id]), 200
+        print("file_id: ", file_id)
+        if not svs_output_queue.empty():
+            results = svs_output_queue.get()
+            print("results: ", results)
+            return jsonify(results[file_id]), 200
     except Exception as e:
-        # 打印异常信息
-        print(traceback.format_exc())
         # 可以在这里记录到日志文件或其他地方
         return jsonify({'error': 'An error occurred', 'message': str(e)}), 500
 
