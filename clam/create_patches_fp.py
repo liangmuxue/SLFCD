@@ -208,21 +208,21 @@ def seg_and_patch(source, save_dir, patch_save_dir, mask_save_dir, stitch_save_d
 
 
 parser = argparse.ArgumentParser(description='seg and patch')
-parser.add_argument('--source', type=str, default=r"/home/bavon/datasets/wsi/normal",
+parser.add_argument('--source', type=str, default=r"/home/bavon/datasets/wsi/lsil",
                     help='path to folder containing raw wsi image files')
-parser.add_argument('--step_size', type=int, default=64, help='step_size')
-parser.add_argument('--patch_size', type=int, default=256, help='patch_size')
+parser.add_argument('--step_size', type=int, default=16, help='step_size')
+parser.add_argument('--patch_size', type=int, default=64, help='patch_size')
 parser.add_argument('--seg_model', type=bool, default=False, help='seg model True or False')
 parser.add_argument('--seg_model_path', type=str, default=r'/home/bavon/project/SLFCD/SLFCD/clam/segmodel/epoch-30.pth', help='seg model path')
 parser.add_argument('--device', type=str, default='cuda:1', help='gpu or cpu')
 parser.add_argument('--patch', default=True, action='store_true')
 parser.add_argument('--seg', default=True, action='store_true')
 parser.add_argument('--stitch', default=False, action='store_true')
-parser.add_argument('--save_dir', type=str, default=r"/home/bavon/datasets/wsi/normal",
+parser.add_argument('--save_dir', type=str, default=r"/home/bavon/datasets/wsi/lsil",
                     help='directory to save processed data')
 parser.add_argument('--preset', default=None, type=str,
                     help='predefined profile of default segmentation and filter parameters (.csv)')
-parser.add_argument('--patch_level', type=int, default=1, help='downsample level at which to patch')
+parser.add_argument('--patch_level', type=int, default=0, help='downsample level at which to patch')
 parser.add_argument('--process_list', type=str, default=None,
                     help='name of list of images to process with parameters (.csv)')
 
@@ -308,5 +308,3 @@ if __name__ == '__main__':
                   patch_level=args.patch_level, patch=args.patch, process_list=process_list,
                   seg_model=args.seg_model, model=model, device=args.device)
     print("process success!!!")
-
-

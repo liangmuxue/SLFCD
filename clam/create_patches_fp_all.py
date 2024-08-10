@@ -125,7 +125,8 @@ def build_data_csv(file_path, split_rate=0.8):
     print("split successful: ", train_file_path, ' and ', valid_file_path)
 
 
-def split_data(csv_path, slide_length=4, aug_num=2, num=3, error=[], type="train"):
+def split_data(csv_path, patch_size=64, slide_size=16, aug_num=2, num=3, error=[], type="train"):
+    slide_length = patch_size // slide_size
     df = pd.read_csv(csv_path, encoding="utf-8")
     for i, svs_files in enumerate(df["slide_id"].values):
         try:
@@ -134,17 +135,17 @@ def split_data(csv_path, slide_length=4, aug_num=2, num=3, error=[], type="train
             json_path = os.path.join(args.source, "json", svs_files.replace("svs", 'json'))
             svs_path = os.path.join(args.source, "data", svs_files)
             mask_path = os.path.join(args.source, "mask", svs_files[:-4])
-
+        
             if os.path.exists(os.path.join(mask_path, 'positive')):
                 shutil.rmtree(os.path.join(mask_path, 'positive'))
             os.makedirs(os.path.join(mask_path, 'positive'))
-            
+        
             if os.path.exists(os.path.join(mask_path, 'negative')):
                 shutil.rmtree(os.path.join(mask_path, 'negative'))
             os.makedirs(os.path.join(mask_path, 'negative'))
-
+        
             print(f"type {type} [{i + 1}/{df.shape[0]}] process {svs_files}")
-
+        
             wsi = openslide.open_slide(svs_path)
             scale, shape = wsi.level_downsamples[args.patch_level], wsi.level_dimensions[args.patch_level]
             image = np.array(wsi.read_region((0, 0), args.patch_level, wsi.level_dimensions[args.patch_level]))
@@ -173,25 +174,29 @@ def split_data(csv_path, slide_length=4, aug_num=2, num=3, error=[], type="train
                 else:
                     floor2 = 0
                     ceil2 = 0
-
+        
                 temp_anno = [anno[0] - floor2, anno[1] - floor1, anno[2] + ceil2, anno[3] + ceil1]
                 anno_regions_positive_copy.append(temp_anno)
                 cv2.rectangle(image_copy, temp_anno[:2], temp_anno[2:], (0, 0, 0), 20, 2)
-
+        
                 if type == 'train':
                     img_zero = image[anno[1]:anno[3], anno[0]:anno[2], :]
                     img_zero = letterbox(img_zero, new_shape=args.img_size)
                     cv2.imwrite(f'{os.path.join(mask_path, "positive")}/positive_{j}_zero.jpg', img_zero)
-
+        
                 img = image[temp_anno[1]:temp_anno[3], temp_anno[0]:temp_anno[2], :]
                 cv2.imwrite(f'{os.path.join(mask_path, "positive")}/positive_{j}.jpg', img)
-
+        
                 # mask_img = mask_tumor[anno[1]:anno[3], anno[0]:anno[2]]
                 # cv2.imwrite(f'{os.path.join(mask_path, "positive")}/{j}_mask.jpg', mask_img)
-
+                
+            
             if type == 'train':
-                aug_annotation_patches(os.path.join(mask_path, "positive"), aug_num)
-
+                try:
+                    aug_annotation_patches(os.path.join(mask_path, "positive"), aug_num)
+                except:
+                    pass
+                
             anno_regions_negative, negative_coords = [], []
             negative_coords_temp = []
             with h5py.File(h5_path, "a") as f:
@@ -200,15 +205,15 @@ def split_data(csv_path, slide_length=4, aug_num=2, num=3, error=[], type="train
                     coord = np.array(coord / scale).astype(np.int32)
                     for j in range(slide_length):
                         for k in range(slide_length):
-                            coord_tar = np.array([coord[0] + j * args.patch_size, coord[1] + k * args.patch_size]).astype(np.int16)
-                            coord_tar = [coord_tar[0], coord_tar[1], coord_tar[0] + args.patch_size,
-                                         coord_tar[1] + args.patch_size]
+                            coord_tar = np.array([coord[0] + j * slide_size, coord[1] + k * slide_size]).astype(np.int16)
+                            coord_tar = [coord_tar[0], coord_tar[1], coord_tar[0] + patch_size,
+                                         coord_tar[1] + patch_size]
                             if coord_tar[2] < shape[0] and coord_tar[3] < shape[1]:
                                 if do_rectangles_intersect(coord_tar, anno_regions_positive_copy):
                                     continue
                                 else:
                                     negative_coords_temp.append(coord_tar)
-
+        
                 np.random.shuffle(negative_coords_temp)
                 for negative_coords in negative_coords_temp[:len(os.listdir(os.path.join(mask_path, "positive")) * num)]:
                     try:
@@ -217,9 +222,9 @@ def split_data(csv_path, slide_length=4, aug_num=2, num=3, error=[], type="train
                     except:
                         continue
                     cv2.rectangle(image_copy, negative_coords[:2], negative_coords[2:], (0, 255, 0), 20, 2)
-
+        
                 cv2.imwrite(f'{mask_path}/negative.jpg', image_copy)
-
+        
                 if "positive" in f:
                     del f["positive"]
                 if "negative" in f:
@@ -233,13 +238,13 @@ def split_data(csv_path, slide_length=4, aug_num=2, num=3, error=[], type="train
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='seg and patch')
-    parser.add_argument('--source', type=str, default=r"/home/bavon/datasets/wsi/ais",
+    parser.add_argument('--source', type=str, default=r"/home/bavon/datasets/wsi/lsil",
                         help='path to folder containing raw wsi image files')
     parser.add_argument('--img_size', type=int, default=224, help='img_size')
-    parser.add_argument('--patch_level', type=int, default=1, help='downsample level at which to patch')
+    parser.add_argument('--patch_level', type=int, default=0, help='downsample level at which to patch')
     parser.add_argument('--patch_size', type=int, default=256, help='patch_size')
-    parser.add_argument('--slide_size', type=int, default=64, help='patch_size')
-    parser.add_argument('--save_dir', type=str, default=r"/home/bavon/datasets/wsi/ais",
+    parser.add_argument('--slide_size', type=int, default=64, help='slide_size')
+    parser.add_argument('--save_dir', type=str, default=r"/home/bavon/datasets/wsi/lsil",
                         help='directory to save processed data')
     args = parser.parse_args()
 
@@ -248,11 +253,13 @@ if __name__ == '__main__':
     train_cvc = os.path.join(args.source, "train.csv")
     val_cvc = os.path.join(args.source, "valid.csv")
 
-    slide_length = args.patch_size // args.slide_size
-
     error = []
-    error = split_data(train_cvc, slide_length=slide_length, aug_num=2, num=3, error=error, type="train")
-    error = split_data(val_cvc, slide_length=slide_length, num=1, error=error, type='val')
+    error = split_data(train_cvc, patch_size=args.patch_size, slide_size=args.slide_size, aug_num=2, num=3, error=error, type="train")
+    error = split_data(val_cvc,patch_size=args.patch_size, slide_size=args.slide_size, num=1, error=error, type='val')
+    
+# [['train', '36.svs', IndexError('There are no images in the pipeline. Add a directory using add_directory(), pointing it to a directory containing images.')], 
+# ['train', '38.svs', IndexError('There are no images in the pipeline. Add a directory using add_directory(), pointing it to a directory containing images.')], 
+# ['train', '37.svs', IndexError('There are no images in the pipeline. Add a directory using add_directory(), pointing it to a directory containing images.')], 
 
     print("process success!!!")
     print('process fail file: ', error)
