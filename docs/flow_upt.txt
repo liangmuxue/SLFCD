@@ -1,24 +1,109 @@
-数据总目录：/home/bavon/datasets/wsi
+数据总目录：/home/qdata/datasets/wsi
 
-ais: level 1；path_size 256；slide_size 64
-hsil: level 1；path_size 256；slide_size 64
-lsil: level 0；path_size 64；slide_size 16
+cls: leval 1；train path_size 256 slide_size 128；infer path_size 256 slide_size 128
+ais: level 1；train path_size 256 slide_size 64；infer path_size 256 slide_size 64
+hsil: level 1；train path_size 256 slide_size 64；infer path_size 256 slide_size 64
+lsil: level 0；train path_size 128 slide_size 64；infer path_size 128 slide_size 64
 
-一 第一阶段
-1 规整文件命名以及xml拷贝
+一 第一阶段 分类
+1. 规整文件命名以及xml拷贝
 custom/data_prepare.py 的 align_xml_svs 方法
 
 2 xml标注文件转json
 camelyon16/bin/utexml2json2.py
 
-3 生成切片（默认level1）
-对 normal/ais/hsil/lsil等都要进行切分
-clam/create_patches_fp.py --source /home/liang/dataset/wsi/ais --save_dir /home/liang/dataset/wsi/ais --step_size 64 --patch_size 256  --patch_level 1 --seg --patch --stitch
-clam/create_patches_fp.py --source /home/liang/dataset/wsi/normal --save_dir /home/liang/dataset/wsi/normal --step_size 64 --patch_size 256  --patch_level 1 --seg --patch --stitch
+3. clam/create_patches_fp.py 获取得到.h5文件
+需要处理 ais/hsil/lsil/normal 四种，
+leval 1
+train path_size 256
+slide_size 128
 
+4. clam/extract_features_fp_all.py
+生成patch特征值
+--data_dir /home/qdata/datasets/wsi --types 'ais','hsil','lsil','normal' --feat_dir /home/qdata/datasets/wsi/combine/features --batch_size 256 --slide_ext .svs
+输出目录 /home/qdata/datasets/wsi/combine/features（pt和h5）
+
+5. custom/data_prepare.py combine_mul_dataset_csv
+types = ['ais', 'hsil', 'lsil', 'normal']
+合并生成训练和测试数据对照表 csv
+path: /home/qdata/datasets/wsi
+
+6. clam/main.py
+训练分类模型 使用 models/model_clam2.py Classifier 模型
+--lr 1e-4 --k 10 --exp_code task_1_tumor_vs_normal_CLAM_50 --bag_loss ce --task task_1_tumor_vs_normal 
+
+7. 推理
+clam/infer.py
+
+二 第二阶段 检测
+1.标注数据生成 xml文件
+需指定路径，层级，图片尺寸
+YOLO/VOCData/split_image_annotations.py
+
+2.划分数据集
+YOLO/VOCData/data_split.py
+
+3.得到处理后的数据标注
+YOLO/VOCData/xml2txt.py.py
+
+4.修改mydata.yaml
+注意修改路径和类别
+
+5.训练
+YOLO/train.py
+
+6.验证
+YOLO/val.py
+
+
+待解决的问题：
+1.分类准确度提升
+2.在目标检测时增加负样本，负样本进行人工标注
+
+
+##########################################################################################
+二 第二阶段 检测
+1. 生成切片（默认level1）
+对 ais/hsil/lsil等都要进行切分
+ais 分类
+level 1
+path_size 256
+slide_size 64
+clam/create_patches_fp.py --source /home/qdata/dataset/wsi/ais --save_dir /home/qdata/dataset/wsi/ais --slide_size 64 --patch_size 256  --patch_level 1
+clam/create_patches_fp_all.py --source /home/qdata/dataset/wsi/ais --save_dir /home/qdata/dataset/wsi/ais --slide_size 64 --patch_size 256  --patch_level 1
+
+hsil 分类
+level 1
+path_size 256
+slide_size 64
+clam/create_patches_fp.py --source /home/qdata/dataset/wsi/hsil --save_dir /home/qdata/dataset/wsi/hsil --slide_size 64 --patch_size 256  --patch_level 1
+clam/create_patches_fp_all.py --source /home/qdata/dataset/wsi/hsil --save_dir /home/qdata/dataset/wsi/hsil --slide_size 64 --patch_size 256  --patch_level 1
+
+lsil 分类
+level 0
+path_size 128
+slide_size 64
+clam/create_patches_fp.py --source /home/qdata/dataset/wsi/lsil --save_dir /home/qdata/dataset/wsi/lsil --slide_size 64 --patch_size 128  --patch_level 0
+clam/create_patches_fp_all.py --source /home/qdata/dataset/wsi/lsil --save_dir /home/qdata/dataset/wsi/lsil --slide_size 64 --patch_size 128  --patch_level 0
+
+2. 训练
+custom/train_with_clamdata.py
+device_ids：1
+mode：ais/hsil/lsil
+
+3. 推理
+custom/infer/came_inference.py
+ais: level 1 path_size 256 slide_size 64
+hsil: level 1 path_size 256 slide_size 64
+lsil: level 0 path_size 128 slide_size 64
+可检测单张图片，也可检测SVS
+
+
+##########################################################################################
+create_patches_fp.py
 输出目录 patches_level1（h5文件，在对应的文件内，里面保存着有效坐标 'coords'及其相关属性），以及 process_list_autogen.csv
 
-4 生成训练和测试数据对照表 csv 划分数据集
+2 生成训练和测试数据对照表 csv 划分数据集
 custom/data_prepare.py 的 build_data_csv 方法
 mode：w
 读取 process_list_autogen.csv，划分第一阶段的数据集划分
@@ -67,5 +152,3 @@ path: /home/bavon/datasets/wsi
   
 3 训练
 clam/main.py -drop_out  --lr 1e-4 --k 10 --label_frac 0.5 --exp_code task_1_tumor_vs_normal_CLAM_50 --weighted_sample --bag_loss ce --inst_loss svm --task task_1_tumor_vs_normal --model_type clam_sb --log_data --data_dir /home/bavon/datasets/wsi/combine --results_dir results/combine
-
-
