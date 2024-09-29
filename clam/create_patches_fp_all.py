@@ -1,5 +1,5 @@
 import math
-import os
+from tqdm import tqdm
 import openslide
 import numpy as np
 import argparse
@@ -8,9 +8,23 @@ import json
 import h5py
 import pandas as pd
 import shutil
+import os
+import pickle
 
 
-def get_anno_box_datas(json_filepath, shape, scale=1):
+def find_temp(min_matrix_1, min_matrix_2, patch_size, temp=2):
+    # 计算当前的gap
+    gap = (min_matrix_1 - min_matrix_2) / temp
+
+    # 如果gap小于或等于patch_size，返回当前的temp
+    if gap <= patch_size:
+        return temp, gap
+    else:
+        # 否则，递归调用find_temp，temp加1
+        return find_temp(min_matrix_1, min_matrix_2, patch_size, temp + 1)
+
+
+def get_anno_box_datas(json_filepath, shape, scale, patch_size):
     """
     取得标注数据,返回矩形候选框格式
     """
@@ -19,14 +33,40 @@ def get_anno_box_datas(json_filepath, shape, scale=1):
     tumor_polygons = dicts['positive']
     mask_tumor = np.zeros((shape[1], shape[0]))
     anno_regions = []
-    for tumor_polygon in tumor_polygons:
+    for tumor_polygon in tqdm(tumor_polygons, desc='process positive', total=len(tumor_polygons)):
         vertices = np.array(tumor_polygon["vertices"]) / scale
         vertices = vertices.astype(np.int32)
         # 多个多边形填充  (code, code, code)
         cv2.fillPoly(mask_tumor, [vertices], (255, 255, 255))
         # 最小矩形框
-        anno_regions.append([vertices.min(axis=0)[0], vertices.min(axis=0)[1],
-                             vertices.max(axis=0)[0], vertices.max(axis=0)[1]])
+        min_matrix = [vertices.min(axis=0)[0], vertices.min(axis=0)[1],
+                      vertices.max(axis=0)[0], vertices.max(axis=0)[1]]
+        # # x > 128 > y
+        # if (min_matrix[2] - min_matrix[0]) > patch_size > (min_matrix[3] - min_matrix[1]):
+        #     temp, gap = find_temp(min_matrix[2], min_matrix[0], patch_size)
+        #     for i in range(1, temp + 1):
+        #         min_matrix_temp = [int(min_matrix[0] + gap * (i - 1)), min_matrix[1],
+        #                            int(min_matrix[0] + gap * i), min_matrix[3]]
+        #         anno_regions.append(min_matrix_temp)
+        # # x < 224 < y
+        # elif (min_matrix[2] - min_matrix[0]) < patch_size < (min_matrix[3] - min_matrix[1]):
+        #     temp, gap = find_temp(min_matrix[3], min_matrix[1], patch_size)
+        #     for i in range(1, temp + 1):
+        #         min_matrix_temp = [min_matrix[0], int(min_matrix[1] + gap * (i - 1)),
+        #                            min_matrix[2], int(min_matrix[1] + gap * i)]
+        #         anno_regions.append(min_matrix_temp)
+        # # x > 224 and y > 224
+        # elif (min_matrix[2] - min_matrix[0]) > patch_size and (min_matrix[3] - min_matrix[1]) > patch_size:
+        #     temp_x, gap_x = find_temp(min_matrix[2], min_matrix[0], patch_size)
+        #     temp_y, gap_y = find_temp(min_matrix[3], min_matrix[1], patch_size)
+        #     for i in range(1, temp_x + 1):
+        #         for j in range(1, temp_y + 1):
+        #             min_matrix_temp = [int(min_matrix[0] + gap_x * (i - 1)), int(min_matrix[1] + gap_y * (j - 1)),
+        #                                int(min_matrix[0] + gap_x * i), int(min_matrix[1] + gap_y * j)]
+        #             anno_regions.append(min_matrix_temp)
+        # else:
+        anno_regions.append(min_matrix)
+
     return anno_regions, mask_tumor
 
 
@@ -125,38 +165,61 @@ def build_data_csv(file_path, split_rate=0.8):
     print("split successful: ", train_file_path, ' and ', valid_file_path)
 
 
-def split_data(csv_path, patch_size=64, slide_size=16, aug_num=2, num=3, error=[], type="train"):
+def find_ratio_of_value_numpy(array_2d, value=255):
+    # 将列表转换为NumPy数组
+    np_array = np.array(array_2d)
+
+    # 计算值为value的元素数量
+    count_value = np_array[np_array == value].size
+    # 计算比率
+    ratio = count_value / np_array.size
+    return ratio
+
+
+def split_data(csv_path, patch_size=64, slide_size=16, patch_level=0, img_size=224, aug_num=2, num=3,
+               error=[], type="train", name='ais'):
     slide_length = patch_size // slide_size
     df = pd.read_csv(csv_path, encoding="utf-8")
     for i, svs_files in enumerate(df["slide_id"].values):
+        # if svs_files in ['4-CG23_14499_02.svs']:
         try:
-            h5_path = os.path.join(args.source, 'patches_level{}'.format(args.patch_level),
-                                   svs_files.replace("svs", 'h5'))
+            h5_path = os.path.join(args.source, 'patches_level{}'.format(patch_level), svs_files.replace("svs", 'h5'))
             json_path = os.path.join(args.source, "json", svs_files.replace("svs", 'json'))
             svs_path = os.path.join(args.source, "data", svs_files)
             mask_path = os.path.join(args.source, "mask", svs_files[:-4])
-        
+
             if os.path.exists(os.path.join(mask_path, 'positive')):
                 shutil.rmtree(os.path.join(mask_path, 'positive'))
             os.makedirs(os.path.join(mask_path, 'positive'))
-        
+
+            if os.path.exists(os.path.join(mask_path, 'positive_mask')):
+                shutil.rmtree(os.path.join(mask_path, 'positive_mask'))
+            os.makedirs(os.path.join(mask_path, 'positive_mask'))
+
             if os.path.exists(os.path.join(mask_path, 'negative')):
                 shutil.rmtree(os.path.join(mask_path, 'negative'))
             os.makedirs(os.path.join(mask_path, 'negative'))
-        
-            print(f"type {type} [{i + 1}/{df.shape[0]}] process {svs_files}")
-        
+
+            if not os.path.exists(os.path.join(args.source, 'org')):
+                os.makedirs(os.path.join(args.source, 'org'))
+                
+            print(f"\ntype {type} [{i + 1}/{df.shape[0]}] process {svs_files}")
+
             wsi = openslide.open_slide(svs_path)
             scale, shape = wsi.level_downsamples[args.patch_level], wsi.level_dimensions[args.patch_level]
             image = np.array(wsi.read_region((0, 0), args.patch_level, wsi.level_dimensions[args.patch_level]))
             image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
-            anno_regions_positive, mask_tumor = get_anno_box_datas(json_path, shape, scale)
-            anno_regions_positive_copy = anno_regions_positive.copy()
+
+            anno_region, mask_tumor = get_anno_box_datas(json_path, shape, scale, patch_size)
             image_copy = image.copy()
-            for j, anno in enumerate(anno_regions_positive):
-                if 224 - anno[3] + anno[1] > 0:
-                    floor1 = math.floor((224 - anno[3] + anno[1]) / 2)
-                    ceil1 = math.ceil((224 - anno[3] + anno[1]) / 2)
+
+            anno_region_positive, error_anno_regions_positive, anno_region_negative = [], [], []
+            anno_region_positive_img, anno_region_negative_img = [], []
+            for j, anno in enumerate(tqdm(anno_region, desc='save svs', total=len(anno_region))):
+                # 补全，使其图片尺寸达到224，224
+                if patch_size - anno[3] + anno[1] > 0:
+                    floor1 = math.floor((patch_size - anno[3] + anno[1]) / 2)
+                    ceil1 = math.ceil((patch_size - anno[3] + anno[1]) / 2)
                     if anno[1] - floor1 < 0:
                         floor1 = 0
                     elif anno[3] + ceil1 > shape[1]:
@@ -164,9 +227,9 @@ def split_data(csv_path, patch_size=64, slide_size=16, aug_num=2, num=3, error=[
                 else:
                     floor1 = 0
                     ceil1 = 0
-                if 224 - anno[2] + anno[0] > 0:
-                    floor2 = math.floor((224 - anno[2] + anno[0]) / 2)
-                    ceil2 = math.ceil((224 - anno[2] + anno[0]) / 2)
+                if patch_size - anno[2] + anno[0] > 0:
+                    floor2 = math.floor((patch_size - anno[2] + anno[0]) / 2)
+                    ceil2 = math.ceil((patch_size - anno[2] + anno[0]) / 2)
                     if anno[0] - floor2 < 0:
                         floor2 = 0
                     elif anno[2] + ceil2 > shape[0]:
@@ -174,63 +237,97 @@ def split_data(csv_path, patch_size=64, slide_size=16, aug_num=2, num=3, error=[
                 else:
                     floor2 = 0
                     ceil2 = 0
-        
+
+                # 新坐标
                 temp_anno = [anno[0] - floor2, anno[1] - floor1, anno[2] + ceil2, anno[3] + ceil1]
-                anno_regions_positive_copy.append(temp_anno)
-                cv2.rectangle(image_copy, temp_anno[:2], temp_anno[2:], (0, 0, 0), 20, 2)
-        
-                if type == 'train':
-                    img_zero = image[anno[1]:anno[3], anno[0]:anno[2], :]
-                    img_zero = letterbox(img_zero, new_shape=args.img_size)
-                    cv2.imwrite(f'{os.path.join(mask_path, "positive")}/positive_{j}_zero.jpg', img_zero)
-        
+
+                temp_mask = mask_tumor[temp_anno[1]: temp_anno[3], temp_anno[0]:temp_anno[2]]
                 img = image[temp_anno[1]:temp_anno[3], temp_anno[0]:temp_anno[2], :]
-                cv2.imwrite(f'{os.path.join(mask_path, "positive")}/positive_{j}.jpg', img)
-        
-                # mask_img = mask_tumor[anno[1]:anno[3], anno[0]:anno[2]]
-                # cv2.imwrite(f'{os.path.join(mask_path, "positive")}/{j}_mask.jpg', mask_img)
-                
-            
+
+                if name != 'lsil':
+                    anno_region_positive_img.append(img)
+                    anno_region_positive.append(temp_anno)
+                    cv2.rectangle(image_copy, temp_anno[:2], temp_anno[2:], (0, 0, 0), 20, 2)
+                    cv2.imwrite(f'{os.path.join(mask_path, "positive")}/positive_{j}.png', img)
+                    cv2.imwrite(f'{os.path.join(mask_path, "positive_mask")}/mask_{j}.png', temp_mask)
+                else:
+                    if find_ratio_of_value_numpy(temp_mask) > 0.5:
+                        anno_region_positive.append(temp_anno)
+                        cv2.rectangle(image_copy, temp_anno[:2], temp_anno[2:], (0, 0, 0), 20, 2)
+                        cv2.imwrite(f'{os.path.join(mask_path, "positive")}/positive_{j}.png', img)
+                        cv2.imwrite(f'{os.path.join(mask_path, "positive_mask")}/mask_{j}.png', temp_mask)
+                    else:
+                        error_anno_regions_positive.append(temp_anno)
+                        cv2.rectangle(image_copy, temp_anno[:2], temp_anno[2:], (0, 0, 255), 20, 2)
+
+                if type == 'train':
+                    # 原始标注尺寸
+                    anno_region_positive_img.append(anno)
+                    img_zero = image[anno[1]:anno[3], anno[0]:anno[2], :]
+                    img_zero = letterbox(img_zero, new_shape=img_size)
+                    cv2.imwrite(f'{os.path.join(mask_path, "positive")}/positive_{j}_zero.png', img_zero)
+
             if type == 'train':
-                try:
-                    aug_annotation_patches(os.path.join(mask_path, "positive"), aug_num)
-                except:
-                    pass
-                
-            anno_regions_negative, negative_coords = [], []
-            negative_coords_temp = []
+                # 数据增强
+                aug_annotation_patches(os.path.join(mask_path, "positive"), aug_num)
+
+            negative_coords_other, negative_coords_blank = [], []
             with h5py.File(h5_path, "a") as f:
                 coords = np.array(f['coords'])
                 for coord in coords:
-                    coord = np.array(coord / scale).astype(np.int32)
+                    coord = np.array(coord / scale).astype(int)
                     for j in range(slide_length):
                         for k in range(slide_length):
-                            coord_tar = np.array([coord[0] + j * slide_size, coord[1] + k * slide_size]).astype(np.int16)
-                            coord_tar = [coord_tar[0], coord_tar[1], coord_tar[0] + patch_size,
-                                         coord_tar[1] + patch_size]
+                            coord_tar = np.array([coord[0] + j * slide_size, coord[1] + k * slide_size]).astype(
+                                np.int16)
+                            coord_tar = [coord_tar[0], coord_tar[1],
+                                         coord_tar[0] + patch_size, coord_tar[1] + patch_size]
                             if coord_tar[2] < shape[0] and coord_tar[3] < shape[1]:
-                                if do_rectangles_intersect(coord_tar, anno_regions_positive_copy):
-                                    continue
-                                else:
-                                    negative_coords_temp.append(coord_tar)
+                                if name != "lsil":
+                                    if do_rectangles_intersect(coord_tar, anno_region_positive):
+                                        continue
+                                    else:
+                                        if coord_tar[0] == 0:
+                                            negative_coords_blank.append(coord_tar)
+                                        else:
+                                            negative_coords_other.append(coord_tar)
+                                # else:
+                                #     if do_rectangles_intersect(coord_tar, anno_region_positive) or \
+                                #             do_rectangles_intersect(coord_tar, error_anno_regions_positive):
+                                #         continue
+                                #     else:
+                                #         if coord_tar[0] == 0:
+                                #             negative_coords_blank.append(coord_tar)
+                                #         else:
+                                #             negative_coords_other.append(coord_tar)
+
+            np.random.shuffle(negative_coords_blank)
+            np.random.shuffle(negative_coords_other)
+
+            #  计算 negative 需要的数量
+            len_num = len(os.listdir(os.path.join(mask_path, "positive")))
+            blank_num = len_num * (num - 1) if len_num else 10
+            other_num = len_num * (num + 1) if len_num else 20
+            anno_region_negative = negative_coords_blank[:blank_num] + negative_coords_other[:other_num]
+            for negative_coords in anno_region_negative:
+                img = image[negative_coords[1]:negative_coords[3], negative_coords[0]:negative_coords[2], :]
+                anno_region_negative_img.append(img)
+                cv2.imwrite(f'{os.path.join(mask_path, "negative")}/negative_{negative_coords}.png', img)
+                cv2.rectangle(image_copy, negative_coords[:2], negative_coords[2:], (0, 255, 0), 20, 2)
+            
+            cv2.imwrite(os.path.join(args.source, 'org', svs_files.replace("svs", 'png')), image_copy)
+            
+            anno_region = {'positive': anno_region_positive, 'negative': anno_region_negative}
+            with open(f'{mask_path}/coords.txt', 'w') as file:
+                file.write(str(anno_region))
+                
+            images_data = {
+                'positive': anno_region_positive_img,
+                'negative': anno_region_negative_img
+            }
+            with open(f'{mask_path}/coords.pkl', 'wb') as f:
+                pickle.dump(images_data, f)
         
-                np.random.shuffle(negative_coords_temp)
-                for negative_coords in negative_coords_temp[:len(os.listdir(os.path.join(mask_path, "positive")) * num)]:
-                    try:
-                        img = image[negative_coords[1]:negative_coords[3], negative_coords[0]:negative_coords[2], :]
-                        cv2.imwrite(f'{os.path.join(mask_path, "negative")}/negative_{negative_coords}.jpg', img)
-                    except:
-                        continue
-                    cv2.rectangle(image_copy, negative_coords[:2], negative_coords[2:], (0, 255, 0), 20, 2)
-        
-                cv2.imwrite(f'{mask_path}/negative.jpg', image_copy)
-        
-                if "positive" in f:
-                    del f["positive"]
-                if "negative" in f:
-                    del f["negative"]
-                f.create_dataset("positive", data=anno_regions_positive)
-                f.create_dataset("negative", data=anno_regions_negative)
         except Exception as e:
             error.append([type, svs_files, e])
     return error
@@ -238,13 +335,13 @@ def split_data(csv_path, patch_size=64, slide_size=16, aug_num=2, num=3, error=[
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='seg and patch')
-    parser.add_argument('--source', type=str, default=r"/home/bavon/datasets/wsi/lsil",
+    parser.add_argument('--source', type=str, default=r"/home/qdata/datasets/wsi/ais",
                         help='path to folder containing raw wsi image files')
     parser.add_argument('--img_size', type=int, default=224, help='img_size')
-    parser.add_argument('--patch_level', type=int, default=0, help='downsample level at which to patch')
+    parser.add_argument('--patch_level', type=int, default=1, help='downsample level at which to patch')
     parser.add_argument('--patch_size', type=int, default=256, help='patch_size')
     parser.add_argument('--slide_size', type=int, default=64, help='slide_size')
-    parser.add_argument('--save_dir', type=str, default=r"/home/bavon/datasets/wsi/lsil",
+    parser.add_argument('--save_dir', type=str, default=r"/home/qdata/datasets/wsi/ais",
                         help='directory to save processed data')
     args = parser.parse_args()
 
@@ -254,12 +351,11 @@ if __name__ == '__main__':
     val_cvc = os.path.join(args.source, "valid.csv")
 
     error = []
-    error = split_data(train_cvc, patch_size=args.patch_size, slide_size=args.slide_size, aug_num=2, num=3, error=error, type="train")
-    error = split_data(val_cvc,patch_size=args.patch_size, slide_size=args.slide_size, num=1, error=error, type='val')
-    
-# [['train', '36.svs', IndexError('There are no images in the pipeline. Add a directory using add_directory(), pointing it to a directory containing images.')], 
-# ['train', '38.svs', IndexError('There are no images in the pipeline. Add a directory using add_directory(), pointing it to a directory containing images.')], 
-# ['train', '37.svs', IndexError('There are no images in the pipeline. Add a directory using add_directory(), pointing it to a directory containing images.')], 
+    error = split_data(train_cvc, patch_size=args.patch_size, slide_size=args.slide_size,
+                        patch_level=args.patch_level, img_size=args.img_size, aug_num=2, num=10, error=error,
+                       type="train", name='ais')
+    error = split_data(val_cvc, patch_size=args.patch_size, slide_size=args.slide_size,
+                       patch_level=args.patch_level, img_size=args.img_size, num=3, error=error, type='val', name='ais')
 
     print("process success!!!")
     print('process fail file: ', error)
