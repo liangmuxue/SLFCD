@@ -1,49 +1,37 @@
-# CUDA_VISIBLE_DEVICES=0,1 python create_heatmaps.py --config config_template.yaml
 --- 
 data_arguments:
   save_path: /home/program/path-dig/image/output
   data_dir: D:/project/SLFCD/dataset/ais/data/1-CG23_18831_01.svs
 model_arguments:
-  num_workers: 0
-  conf: 0.7
+  num_workers: 4
   # number of classes
   n_classes: 4
   device: cuda:1
-  model_size: big
-  drop_out: true
-  k_sample: 8
   batch_size: 256
+  
   cls_arguments:
      patch_level: 1
      patch_size: 256
      step_size: 128
+     
   # arguments for initializing model from checkpoint
   cls_ckpt_path_1: /home/bavon/project/SLFCD/SLFCD/clam/resnet18-f37072fd.pth
   cls_ckpt_path_2: /home/bavon/project/SLFCD/SLFCD/results/combine/task_1_tumor_vs_normal_CLAM_50_all_s1/s_0_checkpoint.pt
-  ais_ckpt_path: /home/bavon/project/SLFCD/SLFCD/results/checkpoints/ais_cbam_with_feature/slfcd-14-val_acc-0.94.ckpt
-  hsil_ckpt_path: /home/bavon/project/SLFCD/SLFCD/results/checkpoints/hsil_cbam_with_feature/slfcd-09-val_acc-0.93.ckpt
-  lsil_ckpt_path: /home/bavon/project/SLFCD/SLFCD/results/checkpoints/lsil_cbam_with_feature1/slfcd-10-val_acc-0.86.ckpt
+  ais_ckpt_path: /home/bavon/project/SLFCD/SLFCD/YOLO/runs/detect/train/weights/best.pt
+  hsil_ckpt_path: /home/bavon/project/SLFCD/SLFCD/YOLO/runs/detect/train3-hsil/weights/best.pt
+  lsil_ckpt_path: /home/bavon/project/SLFCD/SLFCD/YOLO/runs/detect/train5-lsil/weights/best.pt
+  
+  img_size: 1280
+  patch_size: 640
+  slide_size: 320
+  
 ais_arguments:
   patch_level: 1
-  patch_size: 256
-  slide_size: 64
-  label_dict:
-    normal: 0
-    ais: 1
 hsil_arguments:
   patch_level: 1
-  patch_size: 256
-  slide_size: 64
-  label_dict:
-    normal: 0
-    hsil: 1
 lsil_arguments:
   patch_level: 0
-  patch_size: 128
-  slide_size: 64
-  label_dict:
-    normal: 0
-    lsil: 1
+  
 seg_arguments:
   seg_level: 1
   sthresh: 8
@@ -62,3 +50,5 @@ vis_arguments:
 patch_arguments:
   use_padding: true
   contour_fn: four_pt_easy
+
+
